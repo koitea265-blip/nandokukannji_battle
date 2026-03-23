@@ -55,12 +55,14 @@
   <aside id="control-panel" class="w-full md:w-[340px] h-auto md:h-full p-3 md:p-4 flex flex-col gap-3 bg-gradient-to-b from-emerald-50 to-green-100 shadow-[5px_0_15px_rgba(0,0,0,0.1)] z-20 overflow-y-auto relative transition-opacity duration-300 border-r-4 border-green-300">
     <div class="absolute inset-0 opacity-10 pointer-events-none" style="background-image: radial-gradient(#10b981 2px, transparent 2px); background-size: 20px 20px;"></div>
     
-    <div class="flex items-center justify-between md:justify-start gap-2 shrink-0 relative z-10">
+    <div class="flex flex-col w-full gap-2 shrink-0 relative z-10">
       <h1 class="text-xl md:text-2xl font-black text-transparent bg-clip-text bg-gradient-to-r from-green-700 to-emerald-600 drop-shadow-[0_2px_2px_rgba(0,0,0,0.3)] leading-tight flex items-center gap-2">
         <span id="title-icon" class="text-green-700 text-3xl">🌲</span>
         <span class="flex flex-col whitespace-nowrap"><span>難読漢字バトル！</span><span id="title-text" class="text-lg">めくってオセロ(木へん)</span></span>
       </h1>
-      <button id="btn-help" class="bg-white text-green-700 border-2 border-green-500 font-black py-1.5 px-3 rounded-full text-xs shadow-[0_3px_0_#10b981] active:translate-y-1 active:shadow-none transition-all shrink-0">あそびかた</button>
+      <div class="flex justify-end w-full">
+        <button id="btn-help" class="bg-white text-green-700 border-2 border-green-500 font-black py-1.5 px-4 rounded-full text-xs shadow-[0_3px_0_#10b981] active:translate-y-1 active:shadow-none transition-all shrink-0">あそびかた</button>
+      </div>
     </div>
 
     <div class="flex flex-col gap-2 shrink-0 bg-white/80 p-3 rounded-3xl border-4 border-white shadow-sm relative z-10">
@@ -453,6 +455,20 @@
         });
       }
 
+      applyTheme(setKey) {
+        const setConfig = PROBLEM_SETS[setKey];
+        const titleIcon = document.getElementById('title-icon');
+        const titleText = document.getElementById('title-text');
+        const h1Wrap = titleIcon.parentElement;
+        
+        titleIcon.innerText = setConfig.icon;
+        titleIcon.className = `${setConfig.themeText} text-3xl`;
+        titleText.innerText = `めくってオセロ(${setConfig.name})`;
+        
+        // Tailwindのグラデーションクラスを動的置換
+        h1Wrap.className = h1Wrap.className.replace(/from-\w+-\d+ to-\w+-\d+/, `${setConfig.themeFrom} ${setConfig.themeTo}`);
+      }
+
       updateUndoButton(canUndo) {
         if (canUndo) { this.btnUndo.disabled = false; this.btnUndo.classList.remove('opacity-50', 'cursor-not-allowed'); } 
         else { this.btnUndo.disabled = true; this.btnUndo.classList.add('opacity-50', 'cursor-not-allowed'); }
@@ -631,7 +647,7 @@
         if (hasSavedState) {
             this.view.updateToggleUI('boardSize', this.currentSize);
             this.view.updateToggleUI('problemSet', this.data.currentSet);
-            this.applyTheme(this.data.currentSet);
+            this.view.applyTheme(this.data.currentSet);
             this.view.initBoardDOM(this.currentSize, this.data.currentWords, (r, c) => this.handleCellClick(r, c));
             this.view.updateBoardState(this.state);
             this.view.updateUI(this.state);
@@ -640,20 +656,6 @@
         } else {
             this.resetGame(true);
         }
-      }
-
-      applyTheme(setKey) {
-        const setConfig = PROBLEM_SETS[setKey];
-        const titleIcon = document.getElementById('title-icon');
-        const titleText = document.getElementById('title-text');
-        const h1Wrap = titleIcon.parentElement;
-        
-        titleIcon.innerText = setConfig.icon;
-        titleIcon.className = `${setConfig.themeText} text-3xl`;
-        titleText.innerText = `めくってオセロ(${setConfig.name})`;
-        
-        // Tailwindのグラデーションクラスを動的置換
-        h1Wrap.className = h1Wrap.className.replace(/from-\w+-\d+ to-\w+-\d+/, `${setConfig.themeFrom} ${setConfig.themeTo}`);
       }
 
       saveState() {
@@ -707,7 +709,7 @@
         } else {
           this.state.reset();
         }
-        this.applyTheme(this.data.currentSet);
+        this.view.applyTheme(this.data.currentSet);
         this.view.setSettingsLock(false);
         this.view.setUILock(false);
         this.view.initBoardDOM(this.currentSize, this.data.currentWords, (r, c) => this.handleCellClick(r, c));
