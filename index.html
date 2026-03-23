@@ -1,0 +1,851 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>難読漢字バトル！めくってオセロ（木へん）</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=BIZ+UDPMincho&family=Klee+One:wght@400;600&display=swap" rel="stylesheet">
+  
+  <style>
+    body { font-family: 'UD デジタル 教科書体 N-R', 'UD デジタル 教科書体 NK-R', 'BIZ UDPMincho', 'Klee One', serif; }
+    .font-kyokasho { font-family: 'UD デジタル 教科書体 N-R', 'UD デジタル 教科書体 NK-R', 'BIZ UDPMincho', 'Klee One', serif; }
+    .stone-container { perspective: 1000px; }
+    .stone { transition: transform 0.8s cubic-bezier(0.4, 0.0, 0.2, 1); transform-style: preserve-3d; }
+    .stone.flipped { transform: rotateY(180deg); }
+    .stone-face { backface-visibility: hidden; -webkit-backface-visibility: hidden; }
+    .stone-back { transform: rotateY(180deg); }
+    .cell-flip-container { perspective: 1000px; container-type: inline-size; height: 100%; width: 100%; }
+    .cell-flip-inner { transition: transform 0.8s cubic-bezier(0.4, 0.0, 0.2, 1); transform-style: preserve-3d; }
+    .cell-flip-inner.is-flipped { transform: rotateY(180deg); }
+    .cell-flip-face { backface-visibility: hidden; -webkit-backface-visibility: hidden; }
+    .cell-flip-back { transform: rotateY(180deg); }
+    @keyframes bounce-subtle { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
+    .animate-bounce-subtle { animation: bounce-subtle 2s infinite ease-in-out; }
+    @keyframes pulse-glow-p1 { 0%, 100% { background-color: #0c4a6e; box-shadow: inset 0 0 0 2px #0ea5e9; } 50% { background-color: #075985; box-shadow: inset 0 0 0 4px #38bdf8, inset 0 0 20px #38bdf8; } }
+    @keyframes pulse-glow-p2 { 0%, 100% { background-color: #831843; box-shadow: inset 0 0 0 2px #db2777; } 50% { background-color: #9d174d; box-shadow: inset 0 0 0 4px #f472b6, inset 0 0 20px #f472b6; } }
+    .active-player-card { background: white !important; box-shadow: 0 15px 30px -5px rgba(0, 0, 0, 0.3) !important; transform: scale(1.08) translateY(-10px); z-index: 30; border: 4px solid white !important; }
+    * { -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
+    .can-move-p1 { animation: pulse-glow-p1 1.5s infinite ease-in-out !important; cursor: pointer; }
+    .can-move-p2 { animation: pulse-glow-p2 1.5s infinite ease-in-out !important; cursor: pointer; }
+    .showing-highlight { box-shadow: 0 0 0 4px white, 0 0 15px rgba(255, 255, 255, 0.9) !important; z-index: 40; }
+    .place-marker { width: 100%; height: 100%; border-radius: 50%; }
+    .ui-locked { pointer-events: none; opacity: 0.6; filter: grayscale(0.5); }
+    
+    .cell-index {
+      position: absolute; top: 2px; left: 2px;
+      color: rgba(255,255,255,0.9); border: 1px solid rgba(255,255,255,0.6);
+      border-radius: 50%; display: flex; align-items: center; justify-content: center;
+      font-weight: bold; line-height: 1; z-index: 10;
+      width: 14cqw; height: 14cqw; font-size: 8cqw;
+    }
+
+    /* Toggle Button Styles */
+    .toggle-btn { transition: all 0.1s; border-bottom-width: 4px; border-radius: 0.75rem; font-weight: 900; }
+    .toggle-btn.active { background-color: #10b981; color: white; border-bottom-width: 0px; transform: translateY(4px); box-shadow: inset 0 2px 4px rgba(0,0,0,0.2); border-color: transparent; }
+    .toggle-btn:not(.active) { background-color: #ffffff; color: #047857; border-color: #6ee7b7; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+    .toggle-btn:not(.active):hover:not(:disabled) { background-color: #ecfdf5; }
+    .toggle-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+  </style>
+</head>
+<body class="bg-slate-200 transition-colors duration-500 h-screen w-screen flex flex-col md:flex-row overflow-hidden text-gray-800 font-kyokasho">
+
+  <aside id="control-panel" class="w-full md:w-[340px] h-auto md:h-full p-3 md:p-4 flex flex-col gap-3 bg-gradient-to-b from-emerald-50 to-green-100 shadow-[5px_0_15px_rgba(0,0,0,0.1)] z-20 overflow-y-auto relative transition-opacity duration-300 border-r-4 border-green-300">
+    <div class="absolute inset-0 opacity-10 pointer-events-none" style="background-image: radial-gradient(#10b981 2px, transparent 2px); background-size: 20px 20px;"></div>
+    
+    <div class="flex items-center justify-between md:justify-start gap-2 shrink-0 relative z-10">
+      <h1 class="text-xl md:text-2xl font-black text-transparent bg-clip-text bg-gradient-to-r from-green-700 to-emerald-600 drop-shadow-[0_2px_2px_rgba(0,0,0,0.3)] leading-tight flex items-center gap-2">
+        <span id="title-icon" class="text-green-700 text-3xl">🌲</span>
+        <span class="flex flex-col whitespace-nowrap"><span>難読漢字バトル！</span><span id="title-text" class="text-lg">めくってオセロ(木へん)</span></span>
+      </h1>
+      <button id="btn-help" class="bg-white text-green-700 border-2 border-green-500 font-black py-1.5 px-3 rounded-full text-xs shadow-[0_3px_0_#10b981] active:translate-y-1 active:shadow-none transition-all shrink-0">あそびかた</button>
+    </div>
+
+    <div class="flex flex-col gap-2 shrink-0 bg-white/80 p-3 rounded-3xl border-4 border-white shadow-sm relative z-10">
+      <div id="turn-indicator" class="text-lg font-black py-2 rounded-full text-center shadow-md border-4 transition-all duration-300 animate-bounce-subtle tracking-wider">準備中</div>
+      
+      <div class="flex justify-around items-center h-24 md:h-28 relative mt-1">
+        <div id="p1-box" class="flex flex-col items-center p-2 rounded-2xl border-4 border-transparent transition-all duration-500 w-[45%]">
+          <div class="w-10 h-10 mb-1 rounded-full bg-sky-300 border-2 border-sky-400 shadow flex items-center justify-center text-sky-900 font-black text-lg">水</div>
+          <span id="score-1" class="text-3xl md:text-4xl font-black text-slate-800 leading-none">0</span>
+        </div>
+        <div class="text-lg font-black text-green-300 uppercase">VS</div>
+        <div id="p2-box" class="flex flex-col items-center p-2 rounded-2xl border-4 border-transparent transition-all duration-500 w-[45%]">
+          <div class="w-10 h-10 mb-1 rounded-full bg-pink-400 border-2 border-pink-500 shadow flex items-center justify-center text-pink-900 font-black text-lg">ピ</div>
+          <span id="score-2" class="text-3xl md:text-4xl font-black text-slate-800 leading-none">0</span>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-2 gap-2 mt-2">
+        <button id="btn-undo" disabled class="bg-gradient-to-b from-blue-400 to-blue-500 hover:from-blue-500 hover:to-blue-600 text-white border-b-4 border-blue-700 py-2.5 rounded-xl font-black shadow-sm active:translate-y-1 active:border-b-0 transition-all text-sm disabled:opacity-50 disabled:cursor-not-allowed">1手戻す</button>
+        <button id="btn-pass" class="bg-gradient-to-b from-slate-500 to-slate-600 hover:from-slate-600 hover:to-slate-700 text-white border-b-4 border-slate-800 py-2.5 rounded-xl font-black shadow-sm active:translate-y-1 active:border-b-0 transition-all text-sm">パスする</button>
+      </div>
+    </div>
+
+    <div id="settings-panel" class="flex flex-col gap-2 mt-auto bg-white/90 p-3 md:p-4 rounded-2xl border border-green-200 shadow-sm relative z-10 transition-all duration-300 backdrop-blur-sm">
+      <div class="flex justify-between items-center mb-1 relative z-10">
+        <span class="text-sm font-bold text-slate-600 tracking-wide">ゲームの設定</span>
+        <svg id="lock-icon" xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-slate-400 opacity-0 transition-opacity duration-300" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clip-rule="evenodd" /></svg>
+      </div>
+
+      <div class="flex gap-2 relative z-10 mb-1">
+        <button class="toggle-btn flex-1 py-2 text-sm active" data-group="boardSize" data-value="8">盤面: 8×8</button>
+        <button class="toggle-btn flex-1 py-2 text-sm" data-group="boardSize" data-value="6">盤面: 6×6</button>
+      </div>
+
+      <div class="flex gap-2 relative z-10 mb-1">
+        <button class="toggle-btn flex-1 py-2 text-sm active" data-group="problemSet" data-value="kihen">木へん🌲</button>
+        <button class="toggle-btn flex-1 py-2 text-sm" data-group="problemSet" data-value="uohen">魚へん🐟</button>
+      </div>
+      
+      <div class="grid grid-cols-2 gap-2 mt-1 relative z-10">
+        <button id="btn-shuffle" class="bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 py-2 rounded-lg font-bold shadow-sm active:translate-y-0.5 transition-all text-xs">問題をシャッフル</button>
+        <button id="btn-reset" class="bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 py-2 rounded-lg font-bold shadow-sm active:translate-y-0.5 transition-all text-xs">盤面をリセット</button>
+      </div>
+    </div>
+  </aside>
+
+  <main class="flex-1 flex flex-col items-center justify-center p-2 md:p-8 relative shadow-inner">
+    <div id="board-overlay" class="absolute inset-0 z-50 hidden"></div>
+    <div class="w-full max-w-[calc(100vh-4rem)] md:max-w-[calc(100vh-6rem)] aspect-square bg-gradient-to-br from-amber-700 via-yellow-900 to-amber-950 p-2 md:p-4 rounded-2xl shadow-[0_30px_60px_-12px_rgba(0,0,0,0.6)] border-4 border-amber-950 relative overflow-hidden">
+      <div class="absolute inset-2 md:inset-4 rounded-sm shadow-[inset_0_5px_15px_rgba(0,0,0,0.8)] pointer-events-none z-10 border border-black/10"></div>
+      <div id="board" class="flex-1 w-full h-full bg-emerald-800 grid gap-[1px] md:gap-[2px] relative z-0 p-[1px]"></div>
+    </div>
+  </main>
+
+  <!-- Modals -->
+  <div id="modal-clear" class="fixed inset-0 bg-slate-900/80 hidden flex items-center justify-center z-[100] backdrop-blur-sm p-4">
+    <div class="bg-white w-full max-w-4xl rounded-[2rem] shadow-2xl border-8 border-yellow-400 text-center p-6 transform scale-0 transition-transform duration-500 flex flex-col max-h-[90vh]" id="clear-content">
+      <h2 class="text-3xl md:text-4xl font-black mb-2 text-slate-800 shrink-0">しゅうりょう！</h2>
+      <div id="winner-text" class="text-xl md:text-2xl font-bold mb-4 p-3 rounded-2xl border-4 shrink-0"></div>
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-6 overflow-y-auto flex-1 min-h-0 text-left">
+        <div class="bg-sky-50 rounded-xl overflow-hidden border-2 border-sky-200 flex flex-col"><h3 class="font-bold text-sky-800 text-center bg-sky-200 py-1.5 text-sm">水色が獲得</h3><div id="p1-list" class="p-2 space-y-1 overflow-y-auto flex-1 font-sans"></div></div>
+        <div class="bg-pink-50 rounded-xl overflow-hidden border-2 border-pink-200 flex flex-col"><h3 class="font-bold text-pink-800 text-center bg-pink-200 py-1.5 text-sm">ピンクが獲得</h3><div id="p2-list" class="p-2 space-y-1 overflow-y-auto flex-1 font-sans"></div></div>
+        <div class="bg-slate-50 rounded-xl overflow-hidden border-2 border-slate-300 flex flex-col shadow-[0_0_15px_rgba(0,0,0,0.1)]"><h3 class="font-bold text-slate-700 text-center bg-slate-200 py-1.5 text-sm flex flex-col leading-tight"><span>復習リスト</span><span class="text-[10px] font-normal text-slate-500">（パス・未獲得）</span></h3><div id="pass-list" class="p-2 space-y-1 overflow-y-auto flex-1 font-sans"></div></div>
+      </div>
+      <div class="flex gap-2 shrink-0">
+        <button id="btn-restart" class="flex-1 bg-emerald-500 hover:bg-emerald-600 text-white font-black py-4 rounded-xl text-xl shadow-lg active:scale-95 transition-all border-b-4 border-emerald-700 active:border-b-0">もう一度遊ぶ</button>
+        <button id="btn-close-clear" class="w-1/3 bg-slate-400 hover:bg-slate-500 text-white font-black py-4 rounded-xl text-xl shadow-lg active:scale-95 transition-all border-b-4 border-slate-600 active:border-b-0">とじる</button>
+      </div>
+    </div>
+  </div>
+  
+  <div id="modal-pass" class="fixed inset-0 bg-slate-900/50 hidden flex items-center justify-center z-[90] backdrop-blur-sm transition-opacity duration-300 opacity-0 pointer-events-none">
+    <div class="bg-white px-8 py-6 rounded-3xl shadow-2xl border-4 border-green-500 text-center transform scale-90 transition-transform duration-300" id="pass-content">
+      <div class="text-3xl font-black text-green-600 mb-2">パス！</div><div class="text-lg font-bold text-slate-600">おける場所がありません</div>
+    </div>
+  </div>
+
+  <div id="modal-confirm" class="fixed inset-0 bg-slate-900/60 hidden flex items-center justify-center z-[100] backdrop-blur-sm transition-opacity duration-300 opacity-0">
+    <div class="bg-white px-6 py-8 rounded-3xl shadow-2xl border-4 border-rose-500 text-center transform scale-90 transition-transform duration-300 w-11/12 max-w-sm" id="confirm-content">
+      <div class="text-2xl font-black text-rose-600 mb-4 flex items-center justify-center gap-2">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>ちゅうい！
+      </div>
+      <div id="confirm-message" class="text-lg font-bold text-slate-700 mb-6 leading-relaxed text-left"></div>
+      <div class="flex gap-3">
+        <button id="btn-confirm-no" class="flex-1 bg-slate-300 hover:bg-slate-400 text-slate-700 font-black py-3 rounded-xl text-lg shadow-sm active:scale-95 transition-all">やめる</button>
+        <button id="btn-confirm-yes" class="flex-1 bg-rose-500 hover:bg-rose-600 text-white font-black py-3 rounded-xl text-lg shadow-sm active:scale-95 transition-all">はい</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="modal-help" class="fixed inset-0 bg-slate-900/60 hidden flex items-center justify-center z-[110] backdrop-blur-sm transition-opacity duration-300 opacity-0 p-4">
+    <div class="bg-white p-6 md:p-8 rounded-3xl shadow-2xl border-4 border-sky-400 transform scale-90 transition-transform duration-300 w-full max-w-lg flex flex-col" id="help-content">
+      <div class="text-xl md:text-2xl font-black text-sky-600 mb-4 flex items-center gap-2 border-b-2 border-sky-100 pb-2"><svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>あそびかた</div>
+      <div class="text-sm md:text-base font-bold text-slate-700 mb-6 leading-relaxed text-left space-y-3">
+        <p class="flex gap-2 items-start"><span class="bg-sky-100 text-sky-700 px-2 py-0.5 rounded-md shrink-0">1</span> <span>置きたいマスの漢字をタップして読み方をめくります。</span></p>
+        <p class="flex gap-2 items-start"><span class="bg-sky-100 text-sky-700 px-2 py-0.5 rounded-md shrink-0">2</span> <span>もう一度タップすると、石を置きます。</span></p>
+        <p class="flex gap-2 items-start"><span class="bg-sky-100 text-sky-700 px-2 py-0.5 rounded-md shrink-0">3</span> <span>中央から外側に向かうにつれて難しい漢字になります。四隅は超難読漢字です。</span></p>
+        <p class="flex gap-2 items-start"><span class="bg-sky-100 text-sky-700 px-2 py-0.5 rounded-md shrink-0">4</span> <span>わからない時は「パスする」ボタンを押します。</span></p>
+      </div>
+      <button id="btn-close-help" class="w-full bg-sky-500 hover:bg-sky-600 text-white font-black py-3 rounded-xl text-lg shadow-md active:scale-95 transition-all">わかった！</button>
+    </div>
+  </div>
+
+  <script>
+    // ==========================================
+    // 難読漢字データ（JSON構造・将来の外部分離用）
+    // ※Canvas環境の単一ファイル制約により、疑似的に外部JSONをインポートした状態を構築
+    // ==========================================
+    const PROBLEM_SETS = {
+      "kihen": {
+        name: "木へん",
+        icon: "🌲",
+        themeFrom: "from-green-700",
+        themeTo: "to-emerald-600",
+        themeText: "text-green-700",
+        levels: {
+          easy: [
+            {kanji:"桜", yomi:"さくら"}, {kanji:"梅", yomi:"うめ"}, {kanji:"松", yomi:"まつ"}, {kanji:"桃", yomi:"もも"}, 
+            {kanji:"柿", yomi:"かき"}, {kanji:"梨", yomi:"なし"}, {kanji:"栗", yomi:"くり"}, {kanji:"桐", yomi:"きり"}, 
+            {kanji:"杉", yomi:"すぎ"}, {kanji:"椿", yomi:"つばき"}, {kanji:"柳", yomi:"やなぎ"}, {kanji:"桑", yomi:"くわ"},
+            {kanji:"柚", yomi:"ゆず"}, {kanji:"李", yomi:"すもも"}, {kanji:"杏", yomi:"あんず"}
+          ],
+          normal: [
+            {kanji:"楓", yomi:"かえで"}, {kanji:"柊", yomi:"ひいらぎ"}, {kanji:"桂", yomi:"かつら"}, {kanji:"樫", yomi:"かし"}, 
+            {kanji:"楠", yomi:"くすのき"}, {kanji:"榎", yomi:"えのき"}, {kanji:"榊", yomi:"さかき"}, {kanji:"檜", yomi:"ひのき"}, 
+            {kanji:"欅", yomi:"けやき"}, {kanji:"椎", yomi:"しい"}, {kanji:"槙", yomi:"まき"}, {kanji:"梓", yomi:"あずさ"}, 
+            {kanji:"楢", yomi:"なら"}, {kanji:"榛", yomi:"はしばみ"}, {kanji:"檀", yomi:"まゆみ"}, {kanji:"椚", yomi:"くぬぎ"}, 
+            {kanji:"樅", yomi:"もみ"}, {kanji:"栂", yomi:"つが"}, {kanji:"柾", yomi:"まさき"}, {kanji:"梛", yomi:"なぎ"}
+          ],
+          hard: [
+            {kanji:"椛", yomi:"もみじ"}, {kanji:"橙", yomi:"だいだい"}, {kanji:"柏", yomi:"かしわ"}, {kanji:"樺", yomi:"かんば"}, 
+            {kanji:"椰", yomi:"やし"}, {kanji:"栃", yomi:"とち"}, {kanji:"梶", yomi:"かじ"}, {kanji:"枇", yomi:"びわ"},
+            {kanji:"杷", yomi:"びわ"}, {kanji:"柑", yomi:"かん"}, {kanji:"檎", yomi:"りんご"}, {kanji:"檸", yomi:"れもん"},
+            {kanji:"檬", yomi:"れもん"}, {kanji:"柘", yomi:"つげ"}, {kanji:"榴", yomi:"ざくろ"}, {kanji:"榕", yomi:"あこう"},
+            {kanji:"梻", yomi:"しきみ"}, {kanji:"椴", yomi:"とどまつ"}, {kanji:"榿", yomi:"はんのき"}, {kanji:"槲", yomi:"かしわ"},
+            {kanji:"橳", yomi:"ぬで"}, {kanji:"槐", yomi:"えんじゅ"}, {kanji:"椣", yomi:"しで"}, {kanji:"栴", yomi:"せんだん"}
+          ],
+          exHard: [
+            {kanji:"橅", yomi:"ぶな"}, {kanji:"櫨", yomi:"はぜ"}, {kanji:"椨", yomi:"たぶ"}, {kanji:"楪", yomi:"ゆずりは"},
+            {kanji:"樗", yomi:"おうち"}, {kanji:"榧", yomi:"かや"}, {kanji:"櫧", yomi:"かし"}, {kanji:"橲", yomi:"ちしゃ"},
+            {kanji:"欟", yomi:"つき"}, {kanji:"檮", yomi:"ゆずりは"}
+          ]
+        }
+      },
+      "uohen": {
+        name: "魚へん",
+        icon: "🐟",
+        themeFrom: "from-blue-700",
+        themeTo: "to-cyan-600",
+        themeText: "text-blue-700",
+        levels: {
+          easy: [
+            {kanji:"鮭", yomi:"さけ"}, {kanji:"鮪", yomi:"まぐろ"}, {kanji:"鯛", yomi:"たい"}, {kanji:"鰹", yomi:"かつお"}, 
+            {kanji:"鯉", yomi:"こい"}, {kanji:"鮎", yomi:"あゆ"}, {kanji:"鱈", yomi:"たら"}, {kanji:"鯖", yomi:"さば"}, 
+            {kanji:"鰯", yomi:"いわし"}, {kanji:"鮫", yomi:"さめ"}, {kanji:"鯨", yomi:"くじら"}, {kanji:"鯵", yomi:"あじ"},
+            {kanji:"鰤", yomi:"ぶり"}, {kanji:"鱒", yomi:"ます"}, {kanji:"鮑", yomi:"あわび"}
+          ],
+          normal: [
+            {kanji:"鮃", yomi:"ひらめ"}, {kanji:"鰈", yomi:"かれい"}, {kanji:"鱸", yomi:"すずき"}, {kanji:"鰆", yomi:"さわら"}, 
+            {kanji:"鰊", yomi:"にしん"}, {kanji:"鯰", yomi:"なまず"}, {kanji:"鮟", yomi:"あんこう"}, {kanji:"鯒", yomi:"こち"}, 
+            {kanji:"鯣", yomi:"するめ"}, {kanji:"鱚", yomi:"きす"}, {kanji:"鯔", yomi:"ぼら"}, {kanji:"鰰", yomi:"はたはた"}, 
+            {kanji:"鰌", yomi:"どじょう"}, {kanji:"鱶", yomi:"ふか"}, {kanji:"鯱", yomi:"しゃち"}, {kanji:"鮹", yomi:"たこ"}, 
+            {kanji:"鰐", yomi:"わに"}, {kanji:"鱗", yomi:"うろこ"}, {kanji:"鰭", yomi:"ひれ"}, {kanji:"鮮", yomi:"あざやか"}
+          ],
+          hard: [
+            {kanji:"鱓", yomi:"うつぼ"}, {kanji:"鰉", yomi:"ひがい"}, {kanji:"鰕", yomi:"えび"}, {kanji:"鱲", yomi:"おいかわ"}, 
+            {kanji:"鱵", yomi:"さより"}, {kanji:"鱺", yomi:"はも"}, {kanji:"鯆", yomi:"いるか"}, {kanji:"鯏", yomi:"うぐい"},
+            {kanji:"鯑", yomi:"かずのこ"}, {kanji:"鮴", yomi:"ごり"}, {kanji:"鮠", yomi:"はや"}, {kanji:"鰋", yomi:"なまず"},
+            {kanji:"鰙", yomi:"わかさぎ"}, {kanji:"鰚", yomi:"はか"}, {kanji:"鰛", yomi:"いわし"}, {kanji:"鰜", yomi:"かれい"},
+            {kanji:"鰝", yomi:"かれい"}, {kanji:"鰞", yomi:"からすいか"}, {kanji:"鰟", yomi:"たなご"}, {kanji:"鰠", yomi:"ひら"},
+            {kanji:"鰡", yomi:"ぼら"}, {kanji:"鰢", yomi:"ぼら"}, {kanji:"鰣", yomi:"はす"}, {kanji:"鰤", yomi:"えび"}
+          ],
+          exHard: [
+            {kanji:"鱩", yomi:"はたはた"}, {kanji:"鱪", yomi:"しいら"}, {kanji:"鱫", yomi:"あかいえい"}, {kanji:"鱬", yomi:"なまず"},
+            {kanji:"鱭", yomi:"えつ"}, {kanji:"鱮", yomi:"たなご"}, {kanji:"鱯", yomi:"たなご"}, {kanji:"鱰", yomi:"しいら"},
+            {kanji:"鱱", yomi:"かまつつ"}, {kanji:"鱳", yomi:"うなぎ"}
+          ]
+        }
+      }
+    };
+
+    function shuffleArray(array) {
+      const arr = [...array];
+      for (let i = arr.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [arr[i], arr[j]] = [arr[j], arr[i]];
+      }
+      return arr;
+    }
+
+    class SoundManager {
+      constructor() { this.audioCtx = null; }
+      init() { if (!this.audioCtx) this.audioCtx = new (window.AudioContext || window.webkitAudioContext)(); if (this.audioCtx.state === 'suspended') this.audioCtx.resume(); }
+      play(freq, type, duration, vol) { this.init(); const osc = this.audioCtx.createOscillator(); const gain = this.audioCtx.createGain(); osc.type = type; osc.frequency.setValueAtTime(freq, this.audioCtx.currentTime); gain.gain.setValueAtTime(vol, this.audioCtx.currentTime); gain.gain.exponentialRampToValueAtTime(0.01, this.audioCtx.currentTime + duration); osc.connect(gain); gain.connect(this.audioCtx.destination); osc.start(); osc.stop(this.audioCtx.currentTime + duration); }
+      playTap() { this.play(800, 'sine', 0.05, 0.1); }
+      playPlace() { this.init(); const osc = this.audioCtx.createOscillator(); const gain = this.audioCtx.createGain(); osc.type = 'triangle'; osc.frequency.setValueAtTime(150, this.audioCtx.currentTime); osc.frequency.exponentialRampToValueAtTime(40, this.audioCtx.currentTime + 0.1); gain.gain.setValueAtTime(0.4, this.audioCtx.currentTime); gain.gain.exponentialRampToValueAtTime(0.01, this.audioCtx.currentTime + 0.1); osc.connect(gain); gain.connect(this.audioCtx.destination); osc.start(); osc.stop(this.audioCtx.currentTime + 0.1); }
+      playFlip() { this.init(); const osc = this.audioCtx.createOscillator(); const gain = this.audioCtx.createGain(); osc.type = 'sine'; osc.frequency.setValueAtTime(300, this.audioCtx.currentTime); osc.frequency.linearRampToValueAtTime(600, this.audioCtx.currentTime + 0.2); gain.gain.setValueAtTime(0, this.audioCtx.currentTime); gain.gain.linearRampToValueAtTime(0.15, this.audioCtx.currentTime + 0.1); gain.gain.linearRampToValueAtTime(0, this.audioCtx.currentTime + 0.2); osc.connect(gain); gain.connect(this.audioCtx.destination); osc.start(); osc.stop(this.audioCtx.currentTime + 0.2); }
+      playPass() { this.play(440, 'triangle', 0.2, 0.1); }
+      playError() { this.play(150, 'sawtooth', 0.3, 0.2); }
+      playWin() { const notes = [523, 659, 783, 1046]; notes.forEach((f, i) => { setTimeout(() => this.play(f, 'sine', 0.5, 0.15), i * 150); }); }
+    }
+
+    class DataModel {
+      constructor() {
+        this.currentWords = [];
+        this.currentSet = "kihen";
+      }
+
+      generateWords(size) {
+        const totalCells = size * size;
+        let words = Array(totalCells).fill(null);
+        
+        let CORNER_CELLS, CENTER_CELLS, OUTER_CELLS, INNER_CELLS;
+        let easyCount, normalCount, hardCount, exHardCount;
+
+        if (size === 8) {
+          CORNER_CELLS = [0, 7, 56, 63];
+          CENTER_CELLS = [27, 28, 35, 36];
+          OUTER_CELLS = [1,2,3,4,5,6, 8,16,24,32,40,48, 15,23,31,39,47,55, 57,58,59,60,61,62];
+          INNER_CELLS = [18,19,20,21, 26,29, 34,37, 42,43,44,45];
+          easyCount = 12; normalCount = 20; hardCount = 24; exHardCount = 4;
+        } else if (size === 6) {
+          CORNER_CELLS = [0, 5, 30, 35];
+          CENTER_CELLS = [14, 15, 20, 21];
+          OUTER_CELLS = [1,2,3,4, 6,11, 12,17, 18,23, 24,29, 31,32,33,34]; // 四隅と中央を除く外周
+          INNER_CELLS = [7,8,9,10, 13,16, 19,22, 25,26,27,28]; // 外周と中央を除く内周
+          easyCount = 4; normalCount = 8; hardCount = 16; exHardCount = 4;
+        }
+
+        // 難易度別のグラデーション配置（JSONデータから抽出）
+        const currentData = PROBLEM_SETS[this.currentSet].levels;
+        let easyList = shuffleArray([...currentData.easy]);
+        let normalList = shuffleArray([...currentData.normal]);
+        let hardList = shuffleArray([...currentData.hard]);
+        let exHardList = shuffleArray([...currentData.exHard]);
+        
+        while(easyList.length < easyCount) easyList = easyList.concat(shuffleArray([...currentData.easy]));
+        while(normalList.length < normalCount) normalList = normalList.concat(shuffleArray([...currentData.normal]));
+        while(hardList.length < hardCount) hardList = hardList.concat(shuffleArray([...currentData.hard]));
+        while(exHardList.length < exHardCount) exHardList = exHardList.concat(shuffleArray([...currentData.exHard]));
+
+        let eIdx=0, nIdx=0, hIdx=0, exIdx=0;
+
+        for (let i = 0; i < totalCells; i++) {
+          if (CENTER_CELLS.includes(i)) {
+            words[i] = { kanji: "", yomi: "" };
+          } else if (CORNER_CELLS.includes(i)) {
+            words[i] = exHardList[exIdx++];
+          } else if (OUTER_CELLS.includes(i)) {
+            words[i] = hardList[hIdx++];
+          } else if (INNER_CELLS.includes(i)) {
+            words[i] = easyList[eIdx++];
+          } else {
+            words[i] = normalList[nIdx++];
+          }
+        }
+
+        this.currentWords = words;
+        return words;
+      }
+    }
+
+    class BoardModel {
+      constructor(size = 8) {
+        this.size = size;
+        this.directions = [[-1,0],[1,0],[0,-1],[0,1],[-1,-1],[-1,1],[1,-1],[1,1]];
+        this.reset();
+      }
+
+      reset() {
+        this.board = Array(this.size).fill(0).map(() => Array(this.size).fill(0));
+        const mid = this.size / 2;
+        this.board[mid-1][mid-1] = 1; this.board[mid-1][mid] = 2; 
+        this.board[mid][mid-1] = 2; this.board[mid][mid] = 1;
+        this.currentPlayer = 1;
+        this.isGameOver = false;
+        this.showingKanji = null;
+        this.isGameStarted = false;
+        this.passedHistory = new Set();
+        this.historyStack = [];
+      }
+
+      saveState() {
+        this.historyStack.push({ board: JSON.parse(JSON.stringify(this.board)), currentPlayer: this.currentPlayer, passedHistory: Array.from(this.passedHistory) });
+      }
+
+      restoreState() {
+        if (this.historyStack.length === 0) return false;
+        const state = this.historyStack.pop();
+        this.board = state.board;
+        this.currentPlayer = state.currentPlayer;
+        this.passedHistory = new Set(state.passedHistory);
+        this.isGameOver = false;
+        this.showingKanji = null;
+        if (this.historyStack.length === 0) this.isGameStarted = false;
+        return true;
+      }
+
+      getScores() {
+        let s1 = 0, s2 = 0;
+        this.board.forEach(r => r.forEach(v => { if(v===1)s1++; if(v===2)s2++; }));
+        return {s1, s2};
+      }
+
+      getFlippable(r, c, p) {
+        if (this.board[r][c] !== 0) return [];
+        let flips = [];
+        const opp = p === 1 ? 2 : 1;
+        for (let [dr, dc] of this.directions) {
+          let nr = r + dr, nc = c + dc, path = [];
+          while (nr >= 0 && nr < this.size && nc >= 0 && nc < this.size && this.board[nr][nc] === opp) {
+            path.push({r: nr, c: nc}); nr += dr; nc += dc;
+          }
+          if (path.length > 0 && nr >= 0 && nr < this.size && nc >= 0 && nc < this.size && this.board[nr][nc] === p) flips = flips.concat(path);
+        }
+        return flips;
+      }
+
+      hasValidMoves(p) {
+        for (let r = 0; r < this.size; r++) for (let c = 0; c < this.size; c++) if (this.getFlippable(r, c, p).length > 0) return true;
+        return false;
+      }
+    }
+
+    class GameView {
+      constructor() {
+        this.boardEl = document.getElementById('board');
+        this.score1El = document.getElementById('score-1');
+        this.score2El = document.getElementById('score-2');
+        this.turnInd = document.getElementById('turn-indicator');
+        this.p1Box = document.getElementById('p1-box');
+        this.p2Box = document.getElementById('p2-box');
+        this.controlPanel = document.getElementById('control-panel');
+        this.boardOverlay = document.getElementById('board-overlay');
+        this.btnUndo = document.getElementById('btn-undo');
+        this.isAnimating = false;
+      }
+
+      bindEvents(controller) {
+        this.btnUndo.addEventListener('click', () => controller.handleUndo());
+        document.getElementById('btn-pass').addEventListener('click', () => controller.handlePass());
+        document.getElementById('btn-reset').addEventListener('click', () => controller.showConfirm('reset'));
+        document.getElementById('btn-shuffle').addEventListener('click', () => controller.showConfirm('shuffle'));
+        document.getElementById('btn-restart').addEventListener('click', () => controller.handleRestart());
+        
+        document.querySelectorAll('.toggle-btn').forEach(btn => {
+          btn.addEventListener('click', (e) => {
+            if (e.target.disabled) return;
+            controller.handleSettingsChange(e.target.dataset.group, e.target.dataset.value);
+          });
+        });
+
+        document.getElementById('btn-confirm-no').addEventListener('click', () => controller.closeConfirm());
+        document.getElementById('btn-confirm-yes').addEventListener('click', () => controller.executeConfirm());
+        document.getElementById('btn-help').addEventListener('click', () => {
+          controller.sound.playTap();
+          this.showModal('modal-help', 'help-content');
+        });
+        document.getElementById('btn-close-help').addEventListener('click', () => {
+          controller.sound.playTap();
+          this.closeModal('modal-help');
+        });
+        document.getElementById('btn-close-clear').addEventListener('click', () => { 
+          controller.sound.playTap(); 
+          document.getElementById('modal-clear').classList.add('hidden'); 
+        });
+      }
+
+      setUILock(locked) {
+        this.isAnimating = locked;
+        if (locked) { this.controlPanel.classList.add('ui-locked'); this.boardOverlay.classList.remove('hidden'); } 
+        else { this.controlPanel.classList.remove('ui-locked'); this.boardOverlay.classList.add('hidden'); }
+      }
+
+      setSettingsLock(locked) {
+        const btns = document.querySelectorAll('.toggle-btn');
+        const panel = document.getElementById('settings-panel');
+        const lockIcon = document.getElementById('lock-icon');
+        
+        btns.forEach(b => b.disabled = locked);
+        
+        if (locked) { panel.classList.add('opacity-70', 'grayscale-[0.3]'); lockIcon.classList.remove('opacity-0'); } 
+        else { panel.classList.remove('opacity-70', 'grayscale-[0.3]'); lockIcon.classList.add('opacity-0'); }
+      }
+
+      updateToggleUI(group, value) {
+        document.querySelectorAll(`.toggle-btn[data-group="${group}"]`).forEach(btn => {
+          if (btn.dataset.value === String(value)) btn.classList.add('active');
+          else btn.classList.remove('active');
+        });
+      }
+
+      updateUndoButton(canUndo) {
+        if (canUndo) { this.btnUndo.disabled = false; this.btnUndo.classList.remove('opacity-50', 'cursor-not-allowed'); } 
+        else { this.btnUndo.disabled = true; this.btnUndo.classList.add('opacity-50', 'cursor-not-allowed'); }
+      }
+
+      updateUI(state) {
+        const {s1, s2} = state.getScores();
+        this.score1El.innerText = s1; this.score2El.innerText = s2;
+        
+        if (state.currentPlayer === 1) {
+          this.turnInd.innerText = "水色のターン！";
+          this.turnInd.className = "text-base md:text-lg font-black py-2 rounded-full text-center bg-sky-300 text-sky-900 border-4 border-white shadow animate-bounce-subtle tracking-widest";
+          this.p1Box.classList.add('active-player-card'); this.p2Box.classList.remove('active-player-card');
+        } else {
+          this.turnInd.innerText = "ピンクのターン！";
+          this.turnInd.className = "text-base md:text-lg font-black py-2 rounded-full text-center bg-pink-400 text-pink-900 border-4 border-white shadow animate-bounce-subtle tracking-widest";
+          this.p2Box.classList.add('active-player-card'); this.p1Box.classList.remove('active-player-card');
+        }
+      }
+
+      initBoardDOM(size, words, cellClickHandler) {
+        this.boardEl.innerHTML = '';
+        this.boardEl.style.gridTemplateColumns = `repeat(${size}, minmax(0, 1fr))`;
+        this.boardEl.style.gridTemplateRows = `repeat(${size}, minmax(0, 1fr))`;
+
+        for (let r = 0; r < size; r++) {
+          for (let c = 0; c < size; c++) {
+            const word = words[r * size + c], cell = document.createElement('div');
+            cell.className = 'relative w-full h-full cell-flip-container cursor-pointer';
+            cell.onclick = () => cellClickHandler(r, c);
+            const inner = document.createElement('div'); inner.id = `cell-inner-${r}-${c}`; inner.className = 'cell-flip-inner absolute inset-0 w-full h-full rounded-sm shadow-inner bg-emerald-700';
+            
+            // 表面 (漢字)
+            const f = document.createElement('div'); f.id = `face-front-${r}-${c}`; f.className = 'cell-flip-face font-kyokasho absolute inset-0 bg-emerald-700 flex flex-col items-center justify-center p-0.5 overflow-hidden rounded-sm border border-emerald-900/50';
+            // 裏面 (読み)
+            const b = document.createElement('div'); b.className = 'cell-flip-face font-kyokasho cell-flip-back absolute inset-0 bg-emerald-600 flex flex-col items-center justify-center p-1 overflow-hidden rounded-sm border border-emerald-800/50';
+            
+            if (word && word.kanji) {
+              // 表面：インデックス番号
+              const num = document.createElement('div');
+              num.className = 'cell-index';
+              num.innerText = r * size + c + 1;
+              f.appendChild(num);
+
+              // 表面：漢字
+              const kWrap = document.createElement('div');
+              kWrap.className = 'flex-1 w-full flex items-center justify-center min-h-0';
+              const k = document.createElement('div');
+              k.className = 'text-white text-center drop-shadow w-full leading-none translate-y-[8%]'; 
+              k.style.fontSize = '85cqw';
+              k.innerText = word.kanji; 
+              kWrap.appendChild(k);
+              f.appendChild(kWrap);
+
+              // 裏面：読み
+              const yWrap = document.createElement('div');
+              yWrap.className = 'flex-1 w-full flex items-center justify-center min-h-0';
+              const y = document.createElement('div'); 
+              y.className = 'text-white text-center leading-none drop-shadow w-full break-all px-0.5 shrink tracking-tighter'; 
+              y.style.fontSize = word.yomi.length <= 2 ? '30cqw' : (word.yomi.length === 3 ? '24cqw' : '18cqw');
+              y.innerText = word.yomi; 
+              yWrap.appendChild(y);
+              b.appendChild(yWrap);
+            }
+            
+            const sC = document.createElement('div'); sC.id = `s-cont-${r}-${c}`; sC.className = 'absolute inset-1 hidden z-30 pointer-events-none';
+            const s = document.createElement('div'); s.id = `stone-${r}-${c}`; s.className = 'stone w-full h-full rounded-full shadow-md relative';
+            const sf1 = document.createElement('div'); sf1.className = 'stone-face absolute inset-0 rounded-full bg-sky-300 border border-sky-400 shadow-[inset_0_-2px_4px_rgba(0,0,0,0.2)]';
+            const sf2 = document.createElement('div'); sf2.className = 'stone-face stone-back absolute inset-0 rounded-full bg-pink-400 border border-pink-500 shadow-[inset_0_-2px_4px_rgba(0,0,0,0.2)]';
+            s.appendChild(sf1); s.appendChild(sf2); sC.appendChild(s);
+            
+            const mWrap = document.createElement('div'); mWrap.id = `marker-wrap-${r}-${c}`; mWrap.className = 'absolute top-[10%] right-[10%] w-[15%] aspect-square hidden z-20 pointer-events-none rounded-full';
+            const dot = document.createElement('div'); dot.className = 'place-marker'; dot.id = `dot-${r}-${c}`; mWrap.appendChild(dot);
+            
+            inner.appendChild(f); inner.appendChild(b); cell.appendChild(inner); cell.appendChild(sC); cell.appendChild(mWrap); this.boardEl.appendChild(cell);
+          }
+        }
+      }
+
+      updateBoardState(state, showHints = true) {
+        const size = state.size;
+        for (let r = 0; r < size; r++) {
+          for (let c = 0; c < size; c++) {
+            const val = state.board[r][c], inner = document.getElementById(`cell-inner-${r}-${c}`), sC = document.getElementById(`s-cont-${r}-${c}`), front = document.getElementById(`face-front-${r}-${c}`), mWrap = document.getElementById(`marker-wrap-${r}-${c}`), dot = document.getElementById(`dot-${r}-${c}`);
+            const isShowingThis = state.showingKanji && state.showingKanji.r === r && state.showingKanji.c === c;
+            const canMove = showHints && !state.isGameOver && state.getFlippable(r, c, state.currentPlayer).length > 0;
+            
+            if (isShowingThis) { inner.classList.add('is-flipped', 'showing-highlight'); } 
+            else { inner.classList.remove('is-flipped', 'showing-highlight'); }
+            
+            front.classList.remove('can-move-p1', 'can-move-p2');
+            if (val === 0 && canMove && !state.showingKanji) { 
+              front.classList.add(state.currentPlayer === 1 ? 'can-move-p1' : 'can-move-p2'); 
+              mWrap.classList.remove('hidden'); dot.style.backgroundColor = state.currentPlayer === 1 ? '#38bdf8' : '#f472b6'; 
+            } else { mWrap.classList.add('hidden'); }
+            
+            if (val !== 0) { 
+              sC.classList.remove('hidden'); const stone = document.getElementById(`stone-${r}-${c}`); 
+              if(val === 1) stone.classList.remove('flipped'); else stone.classList.add('flipped'); 
+            } else { sC.classList.add('hidden'); }
+          }
+        }
+      }
+
+      showGameOverModal(state, words) {
+        const {s1, s2} = state.getScores();
+        const size = state.size;
+        const wt = document.getElementById('winner-text'); 
+        wt.innerText = s1 > s2 ? "水色の勝ち！🎉" : (s2 > s1 ? "ピンクの勝ち！🎉" : "ひきわけ！🤝");
+        wt.className = `text-2xl font-bold p-4 rounded-xl border flex-shrink-0 ${s1>s2?'bg-sky-50 border-sky-300 text-sky-800':'bg-pink-50 border-pink-300 text-pink-800'}`;
+        
+        let p1Words = [], p2Words = [], unobtainedWords = [];
+        for (let r = 0; r < size; r++) {
+          for (let c = 0; c < size; c++) { 
+            const val = state.board[r][c], word = words[r * size + c]; 
+            if (!word || !word.kanji) continue; 
+            if (val === 1) p1Words.push(word); else if (val === 2) p2Words.push(word); else unobtainedWords.push(word); 
+          }
+        }
+        let reviewSet = new Set([...unobtainedWords, ...state.passedHistory]);
+        const createHTML = (w) => `<div class="px-2 py-1.5 border-b border-slate-200/50 flex justify-between items-end gap-2 bg-white/60 rounded hover:bg-white transition-colors"><span class="text-xl font-bold text-slate-800">${w.kanji}</span><span class="text-xs text-slate-500 font-medium pb-0.5">${w.yomi}</span></div>`;
+        document.getElementById('p1-list').innerHTML = p1Words.map(createHTML).join('');
+        document.getElementById('p2-list').innerHTML = p2Words.map(createHTML).join('');
+        document.getElementById('pass-list').innerHTML = reviewSet.size === 0 ? `<div class="p-4 text-center text-sm text-slate-400">パスされた漢字はありません。<br>すばらしい！</div>` : Array.from(reviewSet).map(createHTML).join('');
+        
+        document.getElementById('modal-clear').classList.remove('hidden');
+        setTimeout(() => document.getElementById('clear-content').classList.add('scale-100'), 50);
+      }
+
+      async showPassModal() {
+        const modal = document.getElementById('modal-pass'), content = document.getElementById('pass-content');
+        modal.classList.remove('hidden'); requestAnimationFrame(() => { modal.classList.remove('opacity-0'); content.classList.remove('scale-90'); });
+        await new Promise(res => setTimeout(res, 1500));
+        modal.classList.add('opacity-0'); content.classList.add('scale-90');
+        await new Promise(res => setTimeout(res, 300)); modal.classList.add('hidden');
+      }
+
+      showConfirmModal(action) {
+        const modal = document.getElementById('modal-confirm'), content = document.getElementById('confirm-content'), msg = document.getElementById('confirm-message'); 
+        msg.innerHTML = action === 'reset' ? "いままでの記録が消えます。<br>ほんとうに盤面をリセットしますか？" : "いままでの記録が消えます。<br>ほんとうに問題をシャッフルしますか？"; 
+        modal.classList.remove('hidden'); requestAnimationFrame(() => { modal.classList.remove('opacity-0'); content.classList.remove('scale-90'); }); 
+      }
+      
+      closeConfirmModal() {
+        const modal = document.getElementById('modal-confirm'), content = document.getElementById('confirm-content'); 
+        modal.classList.add('opacity-0'); content.classList.add('scale-90'); 
+        setTimeout(() => { modal.classList.add('hidden'); }, 300); 
+      }
+
+      showModal(modalId, contentId) {
+        const modal = document.getElementById(modalId), content = document.getElementById(contentId);
+        modal.classList.remove('hidden'); requestAnimationFrame(() => { modal.classList.remove('opacity-0'); content.classList.remove('scale-90'); });
+      }
+
+      closeModal(modalId) {
+        const modal = document.getElementById(modalId);
+        modal.classList.add('opacity-0'); setTimeout(() => modal.classList.add('hidden'), 300);
+      }
+    }
+
+    class GameController {
+      constructor() {
+        this.sound = new SoundManager();
+        this.data = new DataModel();
+        this.currentSize = 8;
+        this.state = new BoardModel(this.currentSize);
+        this.view = new GameView();
+        this.pendingAction = null;
+        this.SAVE_KEY = 'othello_game_state_nandoku';
+      }
+
+      init() {
+        this.view.bindEvents(this);
+        const hasSavedState = this.loadState();
+        
+        if (hasSavedState) {
+            this.view.updateToggleUI('boardSize', this.currentSize);
+            this.view.updateToggleUI('problemSet', this.data.currentSet);
+            this.applyTheme(this.data.currentSet);
+            this.view.initBoardDOM(this.currentSize, this.data.currentWords, (r, c) => this.handleCellClick(r, c));
+            this.view.updateBoardState(this.state);
+            this.view.updateUI(this.state);
+            this.view.updateUndoButton(this.state.historyStack.length > 0);
+            this.view.setSettingsLock(this.state.isGameStarted);
+        } else {
+            this.resetGame(true);
+        }
+      }
+
+      applyTheme(setKey) {
+        const setConfig = PROBLEM_SETS[setKey];
+        const titleIcon = document.getElementById('title-icon');
+        const titleText = document.getElementById('title-text');
+        const h1Wrap = titleIcon.parentElement;
+        
+        titleIcon.innerText = setConfig.icon;
+        titleIcon.className = `${setConfig.themeText} text-3xl`;
+        titleText.innerText = `めくってオセロ(${setConfig.name})`;
+        
+        // Tailwindのグラデーションクラスを動的置換
+        h1Wrap.className = h1Wrap.className.replace(/from-\w+-\d+ to-\w+-\d+/, `${setConfig.themeFrom} ${setConfig.themeTo}`);
+      }
+
+      saveState() {
+        const payload = {
+            boardSize: this.currentSize,
+            currentSet: this.data.currentSet,
+            boardState: {
+                board: this.state.board,
+                currentPlayer: this.state.currentPlayer,
+                isGameOver: this.state.isGameOver,
+                showingKanji: this.state.showingKanji,
+                isGameStarted: this.state.isGameStarted,
+                passedHistory: Array.from(this.state.passedHistory),
+                historyStack: this.state.historyStack
+            },
+            dataState: { currentWords: this.data.currentWords }
+        };
+        localStorage.setItem(this.SAVE_KEY, JSON.stringify(payload));
+      }
+
+      loadState() {
+        const saved = localStorage.getItem(this.SAVE_KEY);
+        if (!saved) return false;
+        try {
+            const payload = JSON.parse(saved);
+            this.currentSize = payload.boardSize || 8;
+            this.data.currentSet = payload.currentSet || "kihen";
+            this.state = new BoardModel(this.currentSize); // サイズ復元のため再生成
+            this.data.currentWords = payload.dataState.currentWords;
+            this.state.board = payload.boardState.board;
+            this.state.currentPlayer = payload.boardState.currentPlayer;
+            this.state.isGameOver = payload.boardState.isGameOver;
+            this.state.showingKanji = payload.boardState.showingKanji;
+            this.state.isGameStarted = payload.boardState.isGameStarted;
+            this.state.passedHistory = new Set(payload.boardState.passedHistory);
+            this.state.historyStack = payload.boardState.historyStack;
+            return true;
+        } catch (e) {
+            localStorage.removeItem(this.SAVE_KEY);
+            return false;
+        }
+      }
+
+      clearSavedState() { localStorage.removeItem(this.SAVE_KEY); }
+
+      resetGame(generateNewWords = true) {
+        if (this.view.isAnimating) return;
+        if (generateNewWords) this.data.generateWords(this.currentSize);
+        if (this.state.size !== this.currentSize) {
+          this.state = new BoardModel(this.currentSize);
+        } else {
+          this.state.reset();
+        }
+        this.applyTheme(this.data.currentSet);
+        this.view.setSettingsLock(false);
+        this.view.setUILock(false);
+        this.view.initBoardDOM(this.currentSize, this.data.currentWords, (r, c) => this.handleCellClick(r, c));
+        this.view.updateBoardState(this.state);
+        this.view.updateUI(this.state);
+        this.view.updateUndoButton(false);
+        this.clearSavedState(); 
+      }
+
+      async handleCellClick(r, c) {
+        if (this.state.isGameOver || this.view.isAnimating) return;
+        this.sound.init();
+        const flips = this.state.getFlippable(r, c, this.state.currentPlayer);
+        
+        if (flips.length === 0 && (!this.state.showingKanji || this.state.showingKanji.r !== r || this.state.showingKanji.c !== c)) { 
+          this.sound.playError(); return; 
+        }
+        
+        if (this.state.showingKanji && this.state.showingKanji.r === r && this.state.showingKanji.c === c) {
+          this.view.setUILock(true); 
+          this.state.saveState();
+          this.view.updateUndoButton(true);
+          
+          this.state.board[r][c] = this.state.currentPlayer; 
+          this.state.showingKanji = null; 
+          this.view.updateBoardState(this.state, false); 
+          this.sound.playPlace();
+          
+          if (!this.state.isGameStarted) { this.state.isGameStarted = true; this.view.setSettingsLock(true); }
+          await new Promise(res => setTimeout(res, 800));
+          
+          for (let pos of flips) { 
+            this.state.board[pos.r][pos.c] = this.state.currentPlayer; 
+            this.view.updateBoardState(this.state, false); 
+            this.sound.playFlip(); 
+            await new Promise(res => setTimeout(res, 500)); 
+          }
+          await new Promise(res => setTimeout(res, 800));
+          
+          const nextPlayer = this.state.currentPlayer === 1 ? 2 : 1;
+          if (this.state.hasValidMoves(nextPlayer)) {
+            this.state.currentPlayer = nextPlayer; 
+          } else if (this.state.hasValidMoves(this.state.currentPlayer)) {
+            this.sound.playPass();
+            await this.view.showPassModal(); 
+          } else { 
+            this.checkGameOver(true); this.view.setUILock(false); this.saveState(); return; 
+          }
+          this.view.setUILock(false); this.view.updateUI(this.state); this.view.updateBoardState(this.state, true); this.checkGameOver(false);
+          this.saveState(); 
+        } else { 
+          this.state.showingKanji = { r, c }; 
+          this.sound.playTap(); 
+          this.view.updateBoardState(this.state, true); 
+          this.saveState(); 
+        }
+      }
+
+      checkGameOver(force = false) {
+        const {s1, s2} = this.state.getScores();
+        const totalCells = this.currentSize * this.currentSize;
+        if (force || s1+s2 === totalCells || (!this.state.hasValidMoves(1) && !this.state.hasValidMoves(2))) {
+          this.state.isGameOver = true; 
+          this.sound.playWin();
+          this.view.showGameOverModal(this.state, this.data.currentWords);
+          this.clearSavedState(); 
+        }
+      }
+
+      handleSettingsChange(group, value) {
+        this.sound.playTap();
+        if (group === 'boardSize') {
+          const newSize = parseInt(value, 10);
+          if (this.currentSize !== newSize) {
+            this.currentSize = newSize;
+            this.resetGame(true);
+          }
+        } else if (group === 'problemSet') {
+          if (this.data.currentSet !== value) {
+            this.data.currentSet = value;
+            this.resetGame(true);
+          }
+        }
+        this.view.updateToggleUI(group, value);
+      }
+
+      handleUndo() {
+        if (this.view.isAnimating || !this.state.restoreState()) return;
+        this.sound.playTap();
+        document.getElementById('modal-clear').classList.add('hidden');
+        if (!this.state.isGameStarted) this.view.setSettingsLock(false);
+        this.view.updateUI(this.state); 
+        this.view.updateBoardState(this.state, true); 
+        this.view.updateUndoButton(this.state.historyStack.length > 0);
+        this.saveState();
+      }
+
+      handlePass() {
+        if(this.state.isGameOver || this.view.isAnimating) return; 
+        this.sound.playPass(); 
+        this.state.saveState();
+        this.view.updateUndoButton(true);
+        if (this.state.showingKanji) { 
+          const word = this.data.currentWords[this.state.showingKanji.r * this.currentSize + this.state.showingKanji.c]; 
+          if (word && word.kanji) this.state.passedHistory.add(word); 
+        }
+        if (!this.state.isGameStarted) { this.state.isGameStarted = true; this.view.setSettingsLock(true); }
+        this.state.currentPlayer = this.state.currentPlayer === 1 ? 2 : 1; 
+        this.state.showingKanji = null; 
+        this.view.updateUI(this.state); 
+        this.view.updateBoardState(this.state); 
+        this.checkGameOver(false);
+        this.saveState(); 
+      }
+
+      showConfirm(action) {
+        if (this.view.isAnimating) return; 
+        this.sound.playError(); 
+        this.pendingAction = action;
+        this.view.showConfirmModal(action);
+      }
+
+      closeConfirm() { this.sound.playTap(); this.view.closeConfirmModal(); this.pendingAction = null; }
+
+      executeConfirm() {
+        this.sound.playPass(); this.view.closeConfirmModal();
+        if (this.pendingAction === 'reset') this.resetGame(false);
+        else if (this.pendingAction === 'shuffle') this.resetGame(true);
+        this.pendingAction = null;
+      }
+
+      handleRestart() { document.getElementById('modal-clear').classList.add('hidden'); this.resetGame(true); }
+    }
+
+    window.onload = () => {
+      const app = new GameController();
+      app.init();
+    };
+  </script>
+</body>
+</html>
