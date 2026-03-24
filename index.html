@@ -1,14 +1,17 @@
 <!DOCTYPE html>
 <html lang="ja">
+<!-- Chosen Palette: Emerald/Sky/Pink/Cyan -->
+<!-- Application Structure Plan: 左側にコントロールパネル、右側にゲーム盤面を配置する2カラムSPA。ローカルとクラウドのハイブリッド永続化を行い、初期化時のデッドロックを解消した堅牢な設計。 -->
+<!-- Visualization & Content Choices: 盤面はCSS Gridと3D Transformを活用したDOMベースの描画。描画負荷と要件制約を考慮しSVGは一切使用せずUnicode絵文字で代替。 -->
+<!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>難読漢字バトル！めくってオセロ（木へん）</title>
+  <title>難読漢字バトル！めくってオセロ</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=BIZ+UDPMincho&family=Klee+One:wght@400;600&display=swap" rel="stylesheet">
-  
   <style>
     body { font-family: 'UD デジタル 教科書体 N-R', 'UD デジタル 教科書体 NK-R', 'BIZ UDPMincho', 'Klee One', serif; }
     .font-kyokasho { font-family: 'UD デジタル 教科書体 N-R', 'UD デジタル 教科書体 NK-R', 'BIZ UDPMincho', 'Klee One', serif; }
@@ -17,7 +20,7 @@
     .stone.flipped { transform: rotateY(180deg); }
     .stone-face { backface-visibility: hidden; -webkit-backface-visibility: hidden; }
     .stone-back { transform: rotateY(180deg); }
-    .cell-flip-container { perspective: 1000px; container-type: inline-size; height: 100%; width: 100%; }
+    .cell-flip-container { perspective: 1000px; height: 100%; width: 100%; }
     .cell-flip-inner { transition: transform 0.8s cubic-bezier(0.4, 0.0, 0.2, 1); transform-style: preserve-3d; }
     .cell-flip-inner.is-flipped { transform: rotateY(180deg); }
     .cell-flip-face { backface-visibility: hidden; -webkit-backface-visibility: hidden; }
@@ -33,16 +36,14 @@
     .showing-highlight { box-shadow: 0 0 0 4px white, 0 0 15px rgba(255, 255, 255, 0.9) !important; z-index: 40; }
     .place-marker { width: 100%; height: 100%; border-radius: 50%; }
     .ui-locked { pointer-events: none; opacity: 0.6; filter: grayscale(0.5); }
-    
+    .has-stone .cell-index,
+    .has-stone .text-white { opacity: 0 !important; transition: opacity 0.3s ease-out; }
     .cell-index {
       position: absolute; top: 2px; left: 2px;
       color: rgba(255,255,255,0.9); border: 1px solid rgba(255,255,255,0.6);
       border-radius: 50%; display: flex; align-items: center; justify-content: center;
       font-weight: bold; line-height: 1; z-index: 10;
-      width: 14cqw; height: 14cqw; font-size: 8cqw;
     }
-
-    /* Toggle Button Styles */
     .toggle-btn { transition: all 0.1s; border-bottom-width: 4px; border-radius: 0.75rem; font-weight: 900; }
     .toggle-btn.active { background-color: #10b981; color: white; border-bottom-width: 0px; transform: translateY(4px); box-shadow: inset 0 2px 4px rgba(0,0,0,0.2); border-color: transparent; }
     .toggle-btn:not(.active) { background-color: #ffffff; color: #047857; border-color: #6ee7b7; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
@@ -51,10 +52,8 @@
   </style>
 </head>
 <body class="bg-slate-200 transition-colors duration-500 h-screen w-screen flex flex-col md:flex-row overflow-hidden text-gray-800 font-kyokasho">
-
-  <aside id="control-panel" class="w-full md:w-[340px] h-auto md:h-full p-3 md:p-4 flex flex-col gap-3 bg-gradient-to-b from-emerald-50 to-green-100 shadow-[5px_0_15px_rgba(0,0,0,0.1)] z-20 overflow-y-auto relative transition-opacity duration-300 border-r-4 border-green-300">
-    <div class="absolute inset-0 opacity-10 pointer-events-none" style="background-image: radial-gradient(#10b981 2px, transparent 2px); background-size: 20px 20px;"></div>
-    
+  <aside id="control-panel" class="w-full md:w-[340px] h-auto md:h-full p-3 md:p-4 flex flex-col gap-3 bg-gradient-to-b from-emerald-50 to-green-100 border-green-300 shadow-[5px_0_15px_rgba(0,0,0,0.1)] z-20 overflow-y-auto relative transition-opacity duration-300 border-r-4">
+    <div id="sidebar-pattern" class="absolute inset-0 opacity-10 pointer-events-none" style="background-image: radial-gradient(#10b981 2px, transparent 2px); background-size: 20px 20px;"></div>
     <div class="flex flex-col w-full gap-2 shrink-0 relative z-10">
       <h1 class="text-xl md:text-2xl font-black text-transparent bg-clip-text bg-gradient-to-r from-green-700 to-emerald-600 drop-shadow-[0_2px_2px_rgba(0,0,0,0.3)] leading-tight flex items-center gap-2">
         <span id="title-icon" class="text-green-700 text-3xl">🌲</span>
@@ -64,10 +63,8 @@
         <button id="btn-help" class="bg-white text-green-700 border-2 border-green-500 font-black py-1.5 px-4 rounded-full text-xs shadow-[0_3px_0_#10b981] active:translate-y-1 active:shadow-none transition-all shrink-0">あそびかた</button>
       </div>
     </div>
-
     <div class="flex flex-col gap-2 shrink-0 bg-white/80 p-3 rounded-3xl border-4 border-white shadow-sm relative z-10">
       <div id="turn-indicator" class="text-lg font-black py-2 rounded-full text-center shadow-md border-4 transition-all duration-300 animate-bounce-subtle tracking-wider">準備中</div>
-      
       <div class="flex justify-around items-center h-24 md:h-28 relative mt-1">
         <div id="p1-box" class="flex flex-col items-center p-2 rounded-2xl border-4 border-transparent transition-all duration-500 w-[45%]">
           <div class="w-10 h-10 mb-1 rounded-full bg-sky-300 border-2 border-sky-400 shadow flex items-center justify-center text-sky-900 font-black text-lg">水</div>
@@ -79,36 +76,30 @@
           <span id="score-2" class="text-3xl md:text-4xl font-black text-slate-800 leading-none">0</span>
         </div>
       </div>
-
       <div class="grid grid-cols-2 gap-2 mt-2">
         <button id="btn-undo" disabled class="bg-gradient-to-b from-blue-400 to-blue-500 hover:from-blue-500 hover:to-blue-600 text-white border-b-4 border-blue-700 py-2.5 rounded-xl font-black shadow-sm active:translate-y-1 active:border-b-0 transition-all text-sm disabled:opacity-50 disabled:cursor-not-allowed">1手戻す</button>
         <button id="btn-pass" class="bg-gradient-to-b from-slate-500 to-slate-600 hover:from-slate-600 hover:to-slate-700 text-white border-b-4 border-slate-800 py-2.5 rounded-xl font-black shadow-sm active:translate-y-1 active:border-b-0 transition-all text-sm">パスする</button>
       </div>
     </div>
-
     <div id="settings-panel" class="flex flex-col gap-2 mt-auto bg-white/90 p-3 md:p-4 rounded-2xl border border-green-200 shadow-sm relative z-10 transition-all duration-300 backdrop-blur-sm">
       <div class="flex justify-between items-center mb-1 relative z-10">
         <span class="text-sm font-bold text-slate-600 tracking-wide">ゲームの設定</span>
-        <svg id="lock-icon" xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-slate-400 opacity-0 transition-opacity duration-300" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clip-rule="evenodd" /></svg>
+        <span id="lock-icon" class="text-slate-400 opacity-0 transition-opacity duration-300 text-lg">🔒</span>
       </div>
-
       <div class="flex gap-2 relative z-10 mb-1">
         <button class="toggle-btn flex-1 py-2 text-sm active" data-group="boardSize" data-value="8">盤面: 8×8</button>
         <button class="toggle-btn flex-1 py-2 text-sm" data-group="boardSize" data-value="6">盤面: 6×6</button>
       </div>
-
       <div class="flex gap-2 relative z-10 mb-1">
         <button class="toggle-btn flex-1 py-2 text-sm active" data-group="problemSet" data-value="kihen">木へん🌲</button>
         <button class="toggle-btn flex-1 py-2 text-sm" data-group="problemSet" data-value="uohen">魚へん🐟</button>
       </div>
-      
       <div class="grid grid-cols-2 gap-2 mt-1 relative z-10">
-        <button id="btn-shuffle" class="bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 py-2 rounded-lg font-bold shadow-sm active:translate-y-0.5 transition-all text-xs">問題をシャッフル</button>
-        <button id="btn-reset" class="bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 py-2 rounded-lg font-bold shadow-sm active:translate-y-0.5 transition-all text-xs">盤面をリセット</button>
+        <button id="btn-shuffle" class="bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 py-2 rounded-lg font-bold shadow-sm active:translate-y-0.5 transition-all text-xs">シャッフル</button>
+        <button id="btn-reset" class="bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 py-2 rounded-lg font-bold shadow-sm active:translate-y-0.5 transition-all text-xs">リセット</button>
       </div>
     </div>
   </aside>
-
   <main class="flex-1 flex flex-col items-center justify-center p-2 md:p-8 relative shadow-inner">
     <div id="board-overlay" class="absolute inset-0 z-50 hidden"></div>
     <div class="w-full max-w-[calc(100vh-4rem)] md:max-w-[calc(100vh-6rem)] aspect-square bg-gradient-to-br from-amber-700 via-yellow-900 to-amber-950 p-2 md:p-4 rounded-2xl shadow-[0_30px_60px_-12px_rgba(0,0,0,0.6)] border-4 border-amber-950 relative overflow-hidden">
@@ -116,8 +107,6 @@
       <div id="board" class="flex-1 w-full h-full bg-emerald-800 grid gap-[1px] md:gap-[2px] relative z-0 p-[1px]"></div>
     </div>
   </main>
-
-  <!-- Modals -->
   <div id="modal-clear" class="fixed inset-0 bg-slate-900/80 hidden flex items-center justify-center z-[100] backdrop-blur-sm p-4">
     <div class="bg-white w-full max-w-4xl rounded-[2rem] shadow-2xl border-8 border-yellow-400 text-center p-6 transform scale-0 transition-transform duration-500 flex flex-col max-h-[90vh]" id="clear-content">
       <h2 class="text-3xl md:text-4xl font-black mb-2 text-slate-800 shrink-0">しゅうりょう！</h2>
@@ -133,17 +122,15 @@
       </div>
     </div>
   </div>
-  
   <div id="modal-pass" class="fixed inset-0 bg-slate-900/50 hidden flex items-center justify-center z-[90] backdrop-blur-sm transition-opacity duration-300 opacity-0 pointer-events-none">
     <div class="bg-white px-8 py-6 rounded-3xl shadow-2xl border-4 border-green-500 text-center transform scale-90 transition-transform duration-300" id="pass-content">
       <div class="text-3xl font-black text-green-600 mb-2">パス！</div><div class="text-lg font-bold text-slate-600">おける場所がありません</div>
     </div>
   </div>
-
   <div id="modal-confirm" class="fixed inset-0 bg-slate-900/60 hidden flex items-center justify-center z-[100] backdrop-blur-sm transition-opacity duration-300 opacity-0">
     <div class="bg-white px-6 py-8 rounded-3xl shadow-2xl border-4 border-rose-500 text-center transform scale-90 transition-transform duration-300 w-11/12 max-w-sm" id="confirm-content">
       <div class="text-2xl font-black text-rose-600 mb-4 flex items-center justify-center gap-2">
-        <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>ちゅうい！
+        <span class="text-3xl">⚠️</span>ちゅうい！
       </div>
       <div id="confirm-message" class="text-lg font-bold text-slate-700 mb-6 leading-relaxed text-left"></div>
       <div class="flex gap-3">
@@ -152,25 +139,26 @@
       </div>
     </div>
   </div>
-
   <div id="modal-help" class="fixed inset-0 bg-slate-900/60 hidden flex items-center justify-center z-[110] backdrop-blur-sm transition-opacity duration-300 opacity-0 p-4">
     <div class="bg-white p-6 md:p-8 rounded-3xl shadow-2xl border-4 border-sky-400 transform scale-90 transition-transform duration-300 w-full max-w-lg flex flex-col" id="help-content">
-      <div class="text-xl md:text-2xl font-black text-sky-600 mb-4 flex items-center gap-2 border-b-2 border-sky-100 pb-2"><svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>あそびかた</div>
+      <div class="text-xl md:text-2xl font-black text-sky-600 mb-4 flex items-center gap-2 border-b-2 border-sky-100 pb-2">
+        <span class="text-3xl">❓</span>あそびかた
+      </div>
       <div class="text-sm md:text-base font-bold text-slate-700 mb-6 leading-relaxed text-left space-y-3">
         <p class="flex gap-2 items-start"><span class="bg-sky-100 text-sky-700 px-2 py-0.5 rounded-md shrink-0">1</span> <span>置きたいマスの漢字をタップして読み方をめくります。</span></p>
         <p class="flex gap-2 items-start"><span class="bg-sky-100 text-sky-700 px-2 py-0.5 rounded-md shrink-0">2</span> <span>もう一度タップすると、石を置きます。</span></p>
         <p class="flex gap-2 items-start"><span class="bg-sky-100 text-sky-700 px-2 py-0.5 rounded-md shrink-0">3</span> <span>中央から外側に向かうにつれて難しい漢字になります。四隅は超難読漢字です。</span></p>
-        <p class="flex gap-2 items-start"><span class="bg-sky-100 text-sky-700 px-2 py-0.5 rounded-md shrink-0">4</span> <span>わからない時は「パスする」ボタンを押します。</span></p>
+        <p class="flex gap-2 items-start"><span class="bg-sky-100 text-sky-700 px-2 py-0.5 rounded-md shrink-0">4</span> <span>石が置かれたマスは、文字が隠れます。</span></p>
+        <p class="flex gap-2 items-start"><span class="bg-sky-100 text-sky-700 px-2 py-0.5 rounded-md shrink-0">5</span> <span>わからない時は「パスする」ボタンを押します。</span></p>
       </div>
       <button id="btn-close-help" class="w-full bg-sky-500 hover:bg-sky-600 text-white font-black py-3 rounded-xl text-lg shadow-md active:scale-95 transition-all">わかった！</button>
     </div>
   </div>
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+    import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+    import { getFirestore, doc, setDoc, getDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-  <script>
-    // ==========================================
-    // 難読漢字データ（JSON構造・将来の外部分離用）
-    // ※Canvas環境の単一ファイル制約により、疑似的に外部JSONをインポートした状態を構築
-    // ==========================================
     const PROBLEM_SETS = {
       "kihen": {
         name: "木へん",
@@ -178,32 +166,48 @@
         themeFrom: "from-green-700",
         themeTo: "to-emerald-600",
         themeText: "text-green-700",
+        sidebarFrom: "from-emerald-50",
+        sidebarTo: "to-green-100",
+        sidebarBorder: "border-green-300",
+        patternColor: "#10b981",
+        btnHelpClass: "bg-white text-green-700 border-2 border-green-500 font-black py-1.5 px-4 rounded-full text-xs shadow-[0_3px_0_#10b981] active:translate-y-1 active:shadow-none transition-all shrink-0",
         levels: {
           easy: [
             {kanji:"桜", yomi:"さくら"}, {kanji:"梅", yomi:"うめ"}, {kanji:"松", yomi:"まつ"}, {kanji:"桃", yomi:"もも"}, 
             {kanji:"柿", yomi:"かき"}, {kanji:"梨", yomi:"なし"}, {kanji:"栗", yomi:"くり"}, {kanji:"桐", yomi:"きり"}, 
             {kanji:"杉", yomi:"すぎ"}, {kanji:"椿", yomi:"つばき"}, {kanji:"柳", yomi:"やなぎ"}, {kanji:"桑", yomi:"くわ"},
-            {kanji:"柚", yomi:"ゆず"}, {kanji:"李", yomi:"すもも"}, {kanji:"杏", yomi:"あんず"}
+            {kanji:"柚", yomi:"ゆず"}, {kanji:"李", yomi:"すもも"}, {kanji:"杏", yomi:"あんず"}, {kanji:"机", yomi:"つくえ"},
+            {kanji:"橋", yomi:"はし"}, {kanji:"村", yomi:"むら"}, {kanji:"柱", yomi:"はしら"}, {kanji:"根", yomi:"ね"},
+            {kanji:"森", yomi:"もり"}, {kanji:"板", yomi:"いた"}, {kanji:"林", yomi:"はやし"}, {kanji:"枝", yomi:"えだ"}
           ],
           normal: [
-            {kanji:"楓", yomi:"かえで"}, {kanji:"柊", yomi:"ひいらぎ"}, {kanji:"桂", yomi:"かつら"}, {kanji:"樫", yomi:"かし"}, 
-            {kanji:"楠", yomi:"くすのき"}, {kanji:"榎", yomi:"えのき"}, {kanji:"榊", yomi:"さかき"}, {kanji:"檜", yomi:"ひのき"}, 
-            {kanji:"欅", yomi:"けやき"}, {kanji:"椎", yomi:"しい"}, {kanji:"槙", yomi:"まき"}, {kanji:"梓", yomi:"あずさ"}, 
-            {kanji:"楢", yomi:"なら"}, {kanji:"榛", yomi:"はしばみ"}, {kanji:"檀", yomi:"まゆみ"}, {kanji:"椚", yomi:"くぬぎ"}, 
-            {kanji:"樅", yomi:"もみ"}, {kanji:"栂", yomi:"つが"}, {kanji:"柾", yomi:"まさき"}, {kanji:"梛", yomi:"なぎ"}
+            {kanji:"桂", yomi:"かつら"}, {kanji:"楠", yomi:"くすのき"}, {kanji:"榎", yomi:"えのき"}, {kanji:"柊", yomi:"ひいらぎ"}, 
+            {kanji:"樫", yomi:"かし"}, {kanji:"檜", yomi:"ひのき"}, {kanji:"樺", yomi:"かんば"}, {kanji:"柏", yomi:"かしわ"}, 
+            {kanji:"楓", yomi:"かえで"}, {kanji:"榊", yomi:"さかき"}, {kanji:"枠", yomi:"わく"}, {kanji:"杭", yomi:"くい"}, 
+            {kanji:"枕", yomi:"まくら"}, {kanji:"桶", yomi:"おけ"}, {kanji:"柄", yomi:"がら"}, {kanji:"棚", yomi:"たな"}, 
+            {kanji:"棟", yomi:"むね"}, {kanji:"札", yomi:"ふだ"}, {kanji:"暦", yomi:"こよみ"}, {kanji:"材", yomi:"ざい"}, 
+            {kanji:"杯", yomi:"さかずき"}, {kanji:"株", yomi:"かぶ"}, {kanji:"植", yomi:"うえる"}, {kanji:"極", yomi:"きわめる"}, 
+            {kanji:"検", yomi:"しらべる"}, {kanji:"構", yomi:"かまえる"}, {kanji:"模", yomi:"も"}, {kanji:"権", yomi:"けん"}, 
+            {kanji:"横", yomi:"よこ"}, {kanji:"機", yomi:"き"}, {kanji:"標", yomi:"しるし"}, {kanji:"樹", yomi:"き"}
           ],
           hard: [
-            {kanji:"椛", yomi:"もみじ"}, {kanji:"橙", yomi:"だいだい"}, {kanji:"柏", yomi:"かしわ"}, {kanji:"樺", yomi:"かんば"}, 
-            {kanji:"椰", yomi:"やし"}, {kanji:"栃", yomi:"とち"}, {kanji:"梶", yomi:"かじ"}, {kanji:"枇", yomi:"びわ"},
-            {kanji:"杷", yomi:"びわ"}, {kanji:"柑", yomi:"かん"}, {kanji:"檎", yomi:"りんご"}, {kanji:"檸", yomi:"れもん"},
-            {kanji:"檬", yomi:"れもん"}, {kanji:"柘", yomi:"つげ"}, {kanji:"榴", yomi:"ざくろ"}, {kanji:"榕", yomi:"あこう"},
-            {kanji:"梻", yomi:"しきみ"}, {kanji:"椴", yomi:"とどまつ"}, {kanji:"榿", yomi:"はんのき"}, {kanji:"槲", yomi:"かしわ"},
-            {kanji:"橳", yomi:"ぬで"}, {kanji:"槐", yomi:"えんじゅ"}, {kanji:"椣", yomi:"しで"}, {kanji:"栴", yomi:"せんだん"}
+            {kanji:"梻", yomi:"しきみ"}, {kanji:"椴", yomi:"とどまつ"}, {kanji:"榿", yomi:"はんのき"}, {kanji:"槲", yomi:"かしわ"}, 
+            {kanji:"橳", yomi:"ぬで"}, {kanji:"槐", yomi:"えんじゅ"}, {kanji:"椋", yomi:"むく"}, {kanji:"梍", yomi:"さいかち"}, 
+            {kanji:"棡", yomi:"みずき"}, {kanji:"榁", yomi:"むろ"}, {kanji:"楸", yomi:"ひさぎ"}, {kanji:"椹", yomi:"さわら"}, 
+            {kanji:"楡", yomi:"にれ"}, {kanji:"梳", yomi:"くしけずる"}, {kanji:"梶", yomi:"かじ"}, {kanji:"楢", yomi:"なら"}, 
+            {kanji:"榛", yomi:"はしばみ"}, {kanji:"樽", yomi:"たる"}, {kanji:"橇", yomi:"そり"}, {kanji:"樵", yomi:"きこり"}, 
+            {kanji:"檀", yomi:"まゆみ"}, {kanji:"欄", yomi:"てすり"}, {kanji:"椚", yomi:"くぬぎ"}, {kanji:"樅", yomi:"もみ"}, 
+            {kanji:"栂", yomi:"つが"}, {kanji:"柾", yomi:"まさき"}, {kanji:"梛", yomi:"なぎ"}, {kanji:"梃", yomi:"てこ"}, 
+            {kanji:"椀", yomi:"わん"}, {kanji:"楯", yomi:"たて"}, {kanji:"櫂", yomi:"かい"}, {kanji:"檸", yomi:"れもん"}, 
+            {kanji:"檬", yomi:"れもん"}, {kanji:"柘", yomi:"つげ"}, {kanji:"榴", yomi:"ざくろ"}, {kanji:"榕", yomi:"あこう"}, 
+            {kanji:"橙", yomi:"だいだい"}, {kanji:"椰", yomi:"やし"}, {kanji:"栃", yomi:"とち"}, {kanji:"枇", yomi:"びわ"}, 
+            {kanji:"杷", yomi:"びわ"}, {kanji:"柑", yomi:"かん"}, {kanji:"檎", yomi:"りんご"}, {kanji:"柵", yomi:"さく"}
           ],
           exHard: [
-            {kanji:"橅", yomi:"ぶな"}, {kanji:"櫨", yomi:"はぜ"}, {kanji:"椨", yomi:"たぶ"}, {kanji:"楪", yomi:"ゆずりは"},
-            {kanji:"樗", yomi:"おうち"}, {kanji:"榧", yomi:"かや"}, {kanji:"櫧", yomi:"かし"}, {kanji:"橲", yomi:"ちしゃ"},
-            {kanji:"欟", yomi:"つき"}, {kanji:"檮", yomi:"ゆずりは"}
+            {kanji:"櫟", yomi:"いちい"}, {kanji:"梣", yomi:"とねりこ"}, {kanji:"橅", yomi:"ぶな"}, {kanji:"櫨", yomi:"はぜ"}, 
+            {kanji:"椨", yomi:"たぶ"}, {kanji:"楪", yomi:"ゆずりは"}, {kanji:"樗", yomi:"おうち"}, {kanji:"榧", yomi:"かや"}, 
+            {kanji:"櫧", yomi:"かし"}, {kanji:"橲", yomi:"ちしゃ"}, {kanji:"欟", yomi:"つき"}, {kanji:"檮", yomi:"ゆずりは"}, 
+            {kanji:"櫤", yomi:"たも"}, {kanji:"櫰", yomi:"えんじゅ"}, {kanji:"櫱", yomi:"ひこばえ"}
           ]
         }
       },
@@ -213,32 +217,55 @@
         themeFrom: "from-blue-700",
         themeTo: "to-cyan-600",
         themeText: "text-blue-700",
+        sidebarFrom: "from-cyan-50",
+        sidebarTo: "to-blue-100",
+        sidebarBorder: "border-blue-300",
+        patternColor: "#0ea5e9",
+        btnHelpClass: "bg-white text-blue-700 border-2 border-blue-500 font-black py-1.5 px-4 rounded-full text-xs shadow-[0_3px_0_#0ea5e9] active:translate-y-1 active:shadow-none transition-all shrink-0",
         levels: {
           easy: [
             {kanji:"鮭", yomi:"さけ"}, {kanji:"鮪", yomi:"まぐろ"}, {kanji:"鯛", yomi:"たい"}, {kanji:"鰹", yomi:"かつお"}, 
             {kanji:"鯉", yomi:"こい"}, {kanji:"鮎", yomi:"あゆ"}, {kanji:"鱈", yomi:"たら"}, {kanji:"鯖", yomi:"さば"}, 
             {kanji:"鰯", yomi:"いわし"}, {kanji:"鮫", yomi:"さめ"}, {kanji:"鯨", yomi:"くじら"}, {kanji:"鯵", yomi:"あじ"},
-            {kanji:"鰤", yomi:"ぶり"}, {kanji:"鱒", yomi:"ます"}, {kanji:"鮑", yomi:"あわび"}
+            {kanji:"鰤", yomi:"ぶり"}, {kanji:"鱒", yomi:"ます"}, {kanji:"鮑", yomi:"あわび"}, {kanji:"鰻", yomi:"うなぎ"}, 
+            {kanji:"鰈", yomi:"かれい"}, {kanji:"鮃", yomi:"ひらめ"}, {kanji:"鱸", yomi:"すずき"}, {kanji:"鰆", yomi:"さわら"}, 
+            {kanji:"鰊", yomi:"にしん"}, {kanji:"鯰", yomi:"なまず"}, {kanji:"鮟", yomi:"あんこう"}, {kanji:"鯒", yomi:"こち"}, 
+            {kanji:"鱚", yomi:"きす"}
           ],
           normal: [
-            {kanji:"鮃", yomi:"ひらめ"}, {kanji:"鰈", yomi:"かれい"}, {kanji:"鱸", yomi:"すずき"}, {kanji:"鰆", yomi:"さわら"}, 
-            {kanji:"鰊", yomi:"にしん"}, {kanji:"鯰", yomi:"なまず"}, {kanji:"鮟", yomi:"あんこう"}, {kanji:"鯒", yomi:"こち"}, 
-            {kanji:"鯣", yomi:"するめ"}, {kanji:"鱚", yomi:"きす"}, {kanji:"鯔", yomi:"ぼら"}, {kanji:"鰰", yomi:"はたはた"}, 
-            {kanji:"鰌", yomi:"どじょう"}, {kanji:"鱶", yomi:"ふか"}, {kanji:"鯱", yomi:"しゃち"}, {kanji:"鮹", yomi:"たこ"}, 
-            {kanji:"鰐", yomi:"わに"}, {kanji:"鱗", yomi:"うろこ"}, {kanji:"鰭", yomi:"ひれ"}, {kanji:"鮮", yomi:"あざやか"}
+            {kanji:"鯣", yomi:"するめ"}, {kanji:"鯔", yomi:"ぼら"}, {kanji:"鰰", yomi:"はたはた"}, {kanji:"鰌", yomi:"どじょう"}, 
+            {kanji:"鱶", yomi:"ふか"}, {kanji:"鯱", yomi:"しゃち"}, {kanji:"鮹", yomi:"たこ"}, {kanji:"鰐", yomi:"わに"}, 
+            {kanji:"鱗", yomi:"うろこ"}, {kanji:"鰭", yomi:"ひれ"}, {kanji:"鮮", yomi:"あざやか"}, {kanji:"鰓", yomi:"えら"}, 
+            {kanji:"鰾", yomi:"うきぶくろ"}, {kanji:"鮨", yomi:"すし"}, {kanji:"鯑", yomi:"かずのこ"}, {kanji:"鰥", yomi:"やもめ"}, 
+            {kanji:"鮗", yomi:"このしろ"}, {kanji:"鮖", yomi:"ごり"}, {kanji:"鮘", yomi:"かじか"}, {kanji:"鮙", yomi:"からすみ"}, 
+            {kanji:"鮚", yomi:"はまぐり"}, {kanji:"鮲", yomi:"まごち"}, {kanji:"鮴", yomi:"めばる"}, {kanji:"鮸", yomi:"にべ"}, 
+            {kanji:"鰧", yomi:"おこぜ"}, {kanji:"鰩", yomi:"えい"}, {kanji:"鰶", yomi:"このしろ"}, {kanji:"鮊", yomi:"しらうお"}, 
+            {kanji:"鮱", yomi:"しらうお"}, {kanji:"鮶", yomi:"いなだ"}, {kanji:"鯄", yomi:"いなだ"}, {kanji:"鯎", yomi:"わかさぎ"}, 
+            {kanji:"鯐", yomi:"いな"}, {kanji:"鯚", yomi:"しらうお"}, {kanji:"鯥", yomi:"むつ"}, {kanji:"鯦", yomi:"あゆ"}, 
+            {kanji:"鯧", yomi:"まなかつお"}, {kanji:"鯪", yomi:"むつ"}, {kanji:"鯫", yomi:"わかさぎ"}, {kanji:"鯲", yomi:"どじょう"}, 
+            {kanji:"鯷", yomi:"ひしこ"}
           ],
           hard: [
-            {kanji:"鱓", yomi:"うつぼ"}, {kanji:"鰉", yomi:"ひがい"}, {kanji:"鰕", yomi:"えび"}, {kanji:"鱲", yomi:"おいかわ"}, 
-            {kanji:"鱵", yomi:"さより"}, {kanji:"鱺", yomi:"はも"}, {kanji:"鯆", yomi:"いるか"}, {kanji:"鯏", yomi:"うぐい"},
-            {kanji:"鯑", yomi:"かずのこ"}, {kanji:"鮴", yomi:"ごり"}, {kanji:"鮠", yomi:"はや"}, {kanji:"鰋", yomi:"なまず"},
-            {kanji:"鰙", yomi:"わかさぎ"}, {kanji:"鰚", yomi:"はか"}, {kanji:"鰛", yomi:"いわし"}, {kanji:"鰜", yomi:"かれい"},
-            {kanji:"鰝", yomi:"かれい"}, {kanji:"鰞", yomi:"からすいか"}, {kanji:"鰟", yomi:"たなご"}, {kanji:"鰠", yomi:"ひら"},
-            {kanji:"鰡", yomi:"ぼら"}, {kanji:"鰢", yomi:"ぼら"}, {kanji:"鰣", yomi:"はす"}, {kanji:"鰤", yomi:"えび"}
+            {kanji:"鰍", yomi:"かじか"}, {kanji:"鰒", yomi:"ふぐ"}, {kanji:"鰘", yomi:"むろあじ"}, {kanji:"鰚", yomi:"はか"}, 
+            {kanji:"鰜", yomi:"かれい"}, {kanji:"鰠", yomi:"ひら"}, {kanji:"鰨", yomi:"かれい"}, {kanji:"鰮", yomi:"いわし"}, 
+            {kanji:"鰱", yomi:"たなご"}, {kanji:"鰳", yomi:"ひら"}, {kanji:"鰵", yomi:"こまい"}, {kanji:"鰷", yomi:"はえ"}, 
+            {kanji:"鰼", yomi:"どじょう"}, {kanji:"鱂", yomi:"めだか"}, {kanji:"鱄", yomi:"さけ"}, {kanji:"鱅", yomi:"このしろ"}, 
+            {kanji:"鱇", yomi:"あんこう"}, {kanji:"鱊", yomi:"たなご"}, {kanji:"鱎", yomi:"はえ"}, {kanji:"鱏", yomi:"えい"}, 
+            {kanji:"鱑", yomi:"えい"}, {kanji:"鱔", yomi:"いな"}, {kanji:"鱕", yomi:"はえ"}, {kanji:"鱖", yomi:"けつぎょ"}, 
+            {kanji:"鱘", yomi:"このしろ"}, {kanji:"鱙", yomi:"わかさぎ"}, {kanji:"鱛", yomi:"えそ"}, {kanji:"鯸", yomi:"えそ"}, 
+            {kanji:"鯹", yomi:"はげ"}, {kanji:"鯾", yomi:"えつ"}, {kanji:"鯿", yomi:"ひら"}, {kanji:"鰀", yomi:"まるた"}, 
+            {kanji:"鰏", yomi:"ひいらぎ"}, {kanji:"鰄", yomi:"かい"}, {kanji:"鰅", yomi:"かい"}, {kanji:"鰇", yomi:"きゅう"}, 
+            {kanji:"鰎", yomi:"けん"}, {kanji:"鰑", yomi:"じゅ"}, {kanji:"鰔", yomi:"かん"}, {kanji:"鰖", yomi:"か"}, 
+            {kanji:"鰗", yomi:"こ"}, {kanji:"鰝", yomi:"こう"}, {kanji:"鰟", yomi:"ほう"}, {kanji:"鰢", yomi:"ば"}, 
+            {kanji:"鰦", yomi:"しん"}, {kanji:"鰪", yomi:"きゅう"}, {kanji:"鰫", yomi:"しゅう"}, {kanji:"鰬", yomi:"しゅう"}
           ],
           exHard: [
-            {kanji:"鱩", yomi:"はたはた"}, {kanji:"鱪", yomi:"しいら"}, {kanji:"鱫", yomi:"あかいえい"}, {kanji:"鱬", yomi:"なまず"},
-            {kanji:"鱭", yomi:"えつ"}, {kanji:"鱮", yomi:"たなご"}, {kanji:"鱯", yomi:"たなご"}, {kanji:"鱰", yomi:"しいら"},
-            {kanji:"鱱", yomi:"かまつつ"}, {kanji:"鱳", yomi:"うなぎ"}
+            {kanji:"鱜", yomi:"ししも"}, {kanji:"鱠", yomi:"えそ"}, {kanji:"鱡", yomi:"しらうお"}, {kanji:"鱢", yomi:"さわら"}, 
+            {kanji:"鱣", yomi:"からちょう"}, {kanji:"鱤", yomi:"どんこ"}, {kanji:"鱥", yomi:"めだか"}, {kanji:"鱦", yomi:"はや"}, 
+            {kanji:"鱧", yomi:"はも"}, {kanji:"鱨", yomi:"あかめ"}, {kanji:"鱩", yomi:"はたはた"}, {kanji:"鱪", yomi:"しいら"}, 
+            {kanji:"鱫", yomi:"あかいえい"}, {kanji:"鱬", yomi:"なまず"}, {kanji:"鱭", yomi:"えつ"}, {kanji:"鱮", yomi:"たなご"}, 
+            {kanji:"鱯", yomi:"たなご"}, {kanji:"鱰", yomi:"しいら"}, {kanji:"鱱", yomi:"かまつつ"}, {kanji:"鱳", yomi:"うなぎ"}, 
+            {kanji:"鱴", yomi:"うぐい"}
           ]
         }
       }
@@ -287,12 +314,11 @@
         } else if (size === 6) {
           CORNER_CELLS = [0, 5, 30, 35];
           CENTER_CELLS = [14, 15, 20, 21];
-          OUTER_CELLS = [1,2,3,4, 6,11, 12,17, 18,23, 24,29, 31,32,33,34]; // 四隅と中央を除く外周
-          INNER_CELLS = [7,8,9,10, 13,16, 19,22, 25,26,27,28]; // 外周と中央を除く内周
+          OUTER_CELLS = [1,2,3,4, 6,11, 12,17, 18,23, 24,29, 31,32,33,34];
+          INNER_CELLS = [7,8,9,10, 13,16, 19,22, 25,26,27,28];
           easyCount = 4; normalCount = 8; hardCount = 16; exHardCount = 4;
         }
 
-        // 難易度別のグラデーション配置（JSONデータから抽出）
         const currentData = PROBLEM_SETS[this.currentSet].levels;
         let easyList = shuffleArray([...currentData.easy]);
         let normalList = shuffleArray([...currentData.normal]);
@@ -460,13 +486,18 @@
         const titleIcon = document.getElementById('title-icon');
         const titleText = document.getElementById('title-text');
         const h1Wrap = titleIcon.parentElement;
+        const panel = document.getElementById('control-panel');
+        const pattern = document.getElementById('sidebar-pattern');
+        const btnHelp = document.getElementById('btn-help');
         
         titleIcon.innerText = setConfig.icon;
         titleIcon.className = `${setConfig.themeText} text-3xl`;
         titleText.innerText = `めくってオセロ(${setConfig.name})`;
         
-        // Tailwindのグラデーションクラスを動的置換
         h1Wrap.className = h1Wrap.className.replace(/from-\w+-\d+ to-\w+-\d+/, `${setConfig.themeFrom} ${setConfig.themeTo}`);
+        panel.className = panel.className.replace(/from-\w+-\d+ to-\w+-\d+ border-\w+-\d+/, `${setConfig.sidebarFrom} ${setConfig.sidebarTo} ${setConfig.sidebarBorder}`);
+        pattern.style.backgroundImage = `radial-gradient(${setConfig.patternColor} 2px, transparent 2px)`;
+        btnHelp.className = setConfig.btnHelpClass;
       }
 
       updateUndoButton(canUndo) {
@@ -494,6 +525,8 @@
         this.boardEl.style.gridTemplateColumns = `repeat(${size}, minmax(0, 1fr))`;
         this.boardEl.style.gridTemplateRows = `repeat(${size}, minmax(0, 1fr))`;
 
+        const cellVmin = 80 / size; 
+
         for (let r = 0; r < size; r++) {
           for (let c = 0; c < size; c++) {
             const word = words[r * size + c], cell = document.createElement('div');
@@ -501,34 +534,37 @@
             cell.onclick = () => cellClickHandler(r, c);
             const inner = document.createElement('div'); inner.id = `cell-inner-${r}-${c}`; inner.className = 'cell-flip-inner absolute inset-0 w-full h-full rounded-sm shadow-inner bg-emerald-700';
             
-            // 表面 (漢字)
             const f = document.createElement('div'); f.id = `face-front-${r}-${c}`; f.className = 'cell-flip-face font-kyokasho absolute inset-0 bg-emerald-700 flex flex-col items-center justify-center p-0.5 overflow-hidden rounded-sm border border-emerald-900/50';
-            // 裏面 (読み)
             const b = document.createElement('div'); b.className = 'cell-flip-face font-kyokasho cell-flip-back absolute inset-0 bg-emerald-600 flex flex-col items-center justify-center p-1 overflow-hidden rounded-sm border border-emerald-800/50';
             
             if (word && word.kanji) {
-              // 表面：インデックス番号
               const num = document.createElement('div');
               num.className = 'cell-index';
+              num.style.width = `calc(${cellVmin * 0.2}vmin)`;
+              num.style.height = `calc(${cellVmin * 0.2}vmin)`;
+              num.style.fontSize = `calc(${cellVmin * 0.12}vmin)`;
               num.innerText = r * size + c + 1;
               f.appendChild(num);
 
-              // 表面：漢字
               const kWrap = document.createElement('div');
               kWrap.className = 'flex-1 w-full flex items-center justify-center min-h-0';
               const k = document.createElement('div');
               k.className = 'text-white text-center drop-shadow w-full leading-none translate-y-[8%]'; 
-              k.style.fontSize = '85cqw';
+              k.style.fontSize = `calc(${cellVmin * 0.7}vmin)`; 
               k.innerText = word.kanji; 
               kWrap.appendChild(k);
               f.appendChild(kWrap);
 
-              // 裏面：読み
               const yWrap = document.createElement('div');
               yWrap.className = 'flex-1 w-full flex items-center justify-center min-h-0';
               const y = document.createElement('div'); 
               y.className = 'text-white text-center leading-none drop-shadow w-full break-all px-0.5 shrink tracking-tighter'; 
-              y.style.fontSize = word.yomi.length <= 2 ? '30cqw' : (word.yomi.length === 3 ? '24cqw' : '18cqw');
+              
+              let yomiSizeRatio = 0.25;
+              if (word.yomi.length === 3) yomiSizeRatio = 0.2;
+              else if (word.yomi.length > 3) yomiSizeRatio = 0.15;
+              y.style.fontSize = `calc(${cellVmin * yomiSizeRatio}vmin)`;
+              
               y.innerText = word.yomi; 
               yWrap.appendChild(y);
               b.appendChild(yWrap);
@@ -568,7 +604,11 @@
             if (val !== 0) { 
               sC.classList.remove('hidden'); const stone = document.getElementById(`stone-${r}-${c}`); 
               if(val === 1) stone.classList.remove('flipped'); else stone.classList.add('flipped'); 
-            } else { sC.classList.add('hidden'); }
+              inner.classList.add('has-stone');
+            } else { 
+              sC.classList.add('hidden'); 
+              inner.classList.remove('has-stone');
+            }
           }
         }
       }
@@ -638,12 +678,60 @@
         this.view = new GameView();
         this.pendingAction = null;
         this.SAVE_KEY = 'othello_game_state_nandoku';
+
+        this.db = null;
+        this.auth = null;
+        this.userId = null;
+        this.appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
       }
 
-      init() {
+      async init() {
         this.view.bindEvents(this);
-        const hasSavedState = this.loadState();
-        
+        this.view.setUILock(true);
+        document.getElementById('turn-indicator').innerText = "データ読込中...";
+
+        try {
+          const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
+          if (Object.keys(firebaseConfig).length === 0) throw new Error("No config");
+          
+          const app = initializeApp(firebaseConfig);
+          this.auth = getAuth(app);
+          this.db = getFirestore(app);
+
+          const initAuth = async () => {
+            if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+              await signInWithCustomToken(this.auth, __initial_auth_token);
+            } else {
+              await signInAnonymously(this.auth);
+            }
+          };
+          await initAuth();
+
+          let isLoaded = false;
+          onAuthStateChanged(this.auth, async (user) => {
+            if (user && !isLoaded) {
+              isLoaded = true;
+              this.userId = user.uid;
+              await this.loadAndStart();
+            }
+          });
+        } catch (error) {
+          this.fallbackToLocalInit();
+        }
+      }
+
+      async loadAndStart() {
+        const hasSavedState = await this.loadStateFromCloud();
+        this.finalizeInit(hasSavedState);
+      }
+
+      fallbackToLocalInit() {
+        const hasSavedState = this.loadStateLocal();
+        this.finalizeInit(hasSavedState);
+      }
+
+      finalizeInit(hasSavedState) {
+        this.view.setUILock(false);
         if (hasSavedState) {
             this.view.updateToggleUI('boardSize', this.currentSize);
             this.view.updateToggleUI('problemSet', this.data.currentSet);
@@ -658,7 +746,7 @@
         }
       }
 
-      saveState() {
+      async saveState() {
         const payload = {
             boardSize: this.currentSize,
             currentSet: this.data.currentSet,
@@ -673,33 +761,70 @@
             },
             dataState: { currentWords: this.data.currentWords }
         };
+        
+        if (this.userId && this.db) {
+          try {
+            const docRef = doc(this.db, 'artifacts', this.appId, 'users', this.userId, 'gameState', 'current');
+            await setDoc(docRef, { data: JSON.stringify(payload) });
+          } catch(e) { }
+        }
         localStorage.setItem(this.SAVE_KEY, JSON.stringify(payload));
       }
 
-      loadState() {
-        const saved = localStorage.getItem(this.SAVE_KEY);
-        if (!saved) return false;
+      async loadStateFromCloud() {
+        if (!this.userId || !this.db) return false;
         try {
-            const payload = JSON.parse(saved);
-            this.currentSize = payload.boardSize || 8;
-            this.data.currentSet = payload.currentSet || "kihen";
-            this.state = new BoardModel(this.currentSize); // サイズ復元のため再生成
-            this.data.currentWords = payload.dataState.currentWords;
-            this.state.board = payload.boardState.board;
-            this.state.currentPlayer = payload.boardState.currentPlayer;
-            this.state.isGameOver = payload.boardState.isGameOver;
-            this.state.showingKanji = payload.boardState.showingKanji;
-            this.state.isGameStarted = payload.boardState.isGameStarted;
-            this.state.passedHistory = new Set(payload.boardState.passedHistory);
-            this.state.historyStack = payload.boardState.historyStack;
-            return true;
-        } catch (e) {
-            localStorage.removeItem(this.SAVE_KEY);
-            return false;
-        }
+          const docRef = doc(this.db, 'artifacts', this.appId, 'users', this.userId, 'gameState', 'current');
+          const docSnap = await getDoc(docRef);
+          if (docSnap.exists() && docSnap.data().data) {
+            return this.applyPayload(JSON.parse(docSnap.data().data));
+          }
+        } catch(e) { }
+        return false;
       }
 
-      clearSavedState() { localStorage.removeItem(this.SAVE_KEY); }
+      loadStateLocal() {
+        const saved = localStorage.getItem(this.SAVE_KEY);
+        if (!saved) return false;
+        try { return this.applyPayload(JSON.parse(saved)); }
+        catch (e) { localStorage.removeItem(this.SAVE_KEY); return false; }
+      }
+
+      applyPayload(payload) {
+        this.currentSize = payload.boardSize || 8;
+        this.data.currentSet = payload.currentSet || "kihen";
+        this.state = new BoardModel(this.currentSize);
+        
+        const isValidWords = payload.dataState && 
+                             Array.isArray(payload.dataState.currentWords) && 
+                             payload.dataState.currentWords.length === this.currentSize * this.currentSize &&
+                             payload.dataState.currentWords.every(w => w === null || (w && typeof w.kanji === 'string'));
+
+        if (isValidWords) {
+            this.data.currentWords = payload.dataState.currentWords;
+        } else {
+            this.data.generateWords(this.currentSize);
+        }
+
+        this.state.board = payload.boardState.board;
+        this.state.currentPlayer = payload.boardState.currentPlayer;
+        this.state.isGameOver = payload.boardState.isGameOver;
+        this.state.showingKanji = payload.boardState.showingKanji;
+        this.state.isGameStarted = payload.boardState.isGameStarted;
+        this.state.passedHistory = new Set(payload.boardState.passedHistory);
+        this.state.historyStack = payload.boardState.historyStack || [];
+        return true;
+      }
+
+      async clearSavedState() { 
+        if (this.userId && this.db) {
+          try {
+            const docRef = doc(this.db, 'artifacts', this.appId, 'users', this.userId, 'gameState', 'current');
+            await deleteDoc(docRef);
+          } catch(e) {}
+        }
+        localStorage.removeItem(this.SAVE_KEY); 
+      }
 
       resetGame(generateNewWords = true) {
         if (this.view.isAnimating) return;
@@ -730,7 +855,7 @@
         
         if (this.state.showingKanji && this.state.showingKanji.r === r && this.state.showingKanji.c === c) {
           this.view.setUILock(true); 
-          this.state.saveState();
+          this.saveState();
           this.view.updateUndoButton(true);
           
           this.state.board[r][c] = this.state.currentPlayer; 
@@ -810,7 +935,7 @@
       handlePass() {
         if(this.state.isGameOver || this.view.isAnimating) return; 
         this.sound.playPass(); 
-        this.state.saveState();
+        this.saveState(); 
         this.view.updateUndoButton(true);
         if (this.state.showingKanji) { 
           const word = this.data.currentWords[this.state.showingKanji.r * this.currentSize + this.state.showingKanji.c]; 
